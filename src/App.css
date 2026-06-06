@@ -31,6 +31,7 @@ button { font-family: inherit; }
 .main { display: flex; flex-direction: column; min-height: 0; }
 .empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #aaa; }
 .main-header { padding: 20px 24px 16px; border-bottom: 1px solid #e5e3dc; }
+.back-btn { display: none; background: none; border: none; font-size: 15px; color: #1D9E75; cursor: pointer; padding: 0 0 12px; font-weight: 500; }
 .row-between { display: flex; justify-content: space-between; align-items: flex-start; }
 .detail-name { font-size: 22px; font-weight: 600; }
 .detail-meta { font-size: 13px; color: #777; margin-top: 4px; }
@@ -79,19 +80,25 @@ button { font-family: inherit; }
 .cancel-btn { padding: 8px 18px; font-size: 14px; background: #fff; color: #777; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
 
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
-.modal { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 420px; }
+.modal { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
 .modal h3 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
 .modal-row { margin-bottom: 12px; }
 .modal-row label { font-size: 12px; color: #777; display: block; margin-bottom: 4px; }
 .modal-row input, .modal-row select { width: 100%; font-size: 14px; padding: 9px 11px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
 .modal-row input:focus, .modal-row select:focus { border-color: #1D9E75; }
-.modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; position: sticky; bottom: 0; background: #fff; padding-top: 10px; }
 
+/* ===== 모바일: 목록과 상세를 화면 단위로 전환 ===== */
 @media (max-width: 720px) {
-  .app { grid-template-columns: 1fr; height: 100vh; }
-  .sidebar { border-right: none; }
-  .main { border-top: 1px solid #e5e3dc; }
+  .app { grid-template-columns: 1fr; height: 100vh; position: relative; }
+  .sidebar { border-right: none; height: 100vh; }
+  /* 상세가 열리면 목록(사이드바)은 숨기고 상세(main)를 전체화면으로 */
+  .app.detail-open .sidebar { display: none; }
+  .app:not(.detail-open) .main { display: none; }
+  .main { height: 100vh; }
+  .back-btn { display: block; }
   .info-grid { grid-template-columns: 1fr; }
   .stage-step { font-size: 10px; padding: 7px 2px; }
   .detail-meta span { display: block; margin: 2px 0; }
+  .modal { max-height: 85vh; padding: 20px; }
 }
