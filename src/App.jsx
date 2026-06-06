@@ -23,6 +23,18 @@ const STATUS_COLORS = {
   '결정통보다시': ['#E1F5EE', '#0F6E56'],
   '면접연기': ['#F1EFE8', '#5F5E5A'],
 }
+// 모아보기 종류
+const VIEWS = [
+  { key: '전체', label: '전체' },
+  { key: 's:재통화', label: '재통화' },
+  { key: 's:면접예정', label: '면접예정' },
+  { key: 's:재면접의사', label: '재면접의사' },
+  { key: 's:결정통보다시', label: '결정통보다시' },
+  { key: 's:면접연기', label: '면접연기' },
+  { key: 's:지원취소', label: '지원취소' },
+  { key: 'interview7', label: '최근1주일 면접자' },
+  { key: 'undecided', label: '면접후 미결정' },
+]
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
 const CALL_COLORS = {
   '연결됨': ['#E1F5EE', '#0F6E56'],
@@ -36,7 +48,7 @@ export default function App() {
   const [applicants, setApplicants] = useState([])
   const [calls, setCalls] = useState([])
   const [selectedId, setSelectedId] = useState(null)
-  const [filterStage, setFilterStage] = useState('전체')
+  const [view, setView] = useState('전체')
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState('info')
   const [showModal, setShowModal] = useState(false)
@@ -74,11 +86,39 @@ export default function App() {
   const selected = applicants.find(a => a.id === selectedId)
   const selectedCalls = calls.filter(c => c.applicant_id === selectedId)
 
+  function matchView(a) {
+    if (view === '전체') return true
+    if (view.startsWith('s:')) return a.status === view.slice(2)
+    if (view === 'interview7') {
+      if (!a.interview_at) return false
+      const t = new Date(a.interview_at).getTime()
+      const now = Date.now()
+      const weekAgo = now - 7 * 24 * 60 * 60 * 1000
+      return t >= weekAgo && t <= now + 24 * 60 * 60 * 1000
+    }
+    if (view === 'undecided') return a.stage === '면접'
+    return true
+  }
+
   const filtered = applicants.filter(a => {
     const mq = !search || a.name.includes(search) || a.phone.includes(search)
-    const ms = filterStage === '전체' || a.stage === filterStage
-    return mq && ms
+    return mq && matchView(a)
   })
+
+  function viewCount(key) {
+    return applicants.filter(a => {
+      if (key === '전체') return true
+      if (key.startsWith('s:')) return a.status === key.slice(2)
+      if (key === 'interview7') {
+        if (!a.interview_at) return false
+        const t = new Date(a.interview_at).getTime()
+        const now = Date.now()
+        return t >= now - 7 * 24 * 60 * 60 * 1000 && t <= now + 24 * 60 * 60 * 1000
+      }
+      if (key === 'undecided') return a.stage === '면접'
+      return false
+    }).length
+  }
 
   async function addApplicant(form) {
     const { data, error } = await supabase.from('applicants').insert([form]).select()
@@ -127,14 +167,13 @@ export default function App() {
         </div>
 
         <div className="stage-filter">
-          <p>채용 단계</p>
-          {['전체', ...STAGES].map(s => {
-            const count = s === '전체' ? applicants.length : applicants.filter(a => a.stage === s).length
-            const [bg, fg] = s === '전체' ? ['#fff', '#555'] : STAGE_COLORS[s]
+          <p>모아보기</p>
+          {VIEWS.map(v => {
+            const cnt = viewCount(v.key)
             return (
-              <span key={s} className={'stage-pill' + (filterStage === s ? ' active' : '')}
-                style={{ background: bg, color: fg }} onClick={() => setFilterStage(s)}>
-                {s} {count}
+              <span key={v.key} className={'stage-pill' + (view === v.key ? ' active' : '')}
+                onClick={() => setView(v.key)}>
+                {v.label} {cnt}
               </span>
             )
           })}
@@ -147,7 +186,6 @@ export default function App() {
           {filtered.map(a => {
             const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
             const sc = STATUS_COLORS[a.status]
-            const line2 = [a.stage, a.age ? a.age + '세' : null, a.position].filter(Boolean).join(' · ')
             return (
               <div key={a.id} className={'applicant-card' + (a.id === selectedId ? ' selected' : '')}
                 onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
