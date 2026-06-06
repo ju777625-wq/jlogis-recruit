@@ -103,8 +103,10 @@ export default function App() {
     await loadData()
   }
 
+  const detailOpen = !!selected
+
   return (
-    <div className="app">
+    <div className={'app' + (detailOpen ? ' detail-open' : '')}>
       <div className="sidebar">
         <div className="sidebar-header">
           <h2>👥 구직자 관리</h2>
@@ -157,6 +159,7 @@ export default function App() {
         ) : (
           <>
             <div className="main-header">
+              <button className="back-btn" onClick={() => setSelectedId(null)}>← 목록</button>
               <div className="row-between">
                 <div>
                   <div className="detail-name">{selected.name}</div>
