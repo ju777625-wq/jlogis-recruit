@@ -314,6 +314,11 @@ function InfoTab({ a, onChange }) {
         <Field label="면접 장소" value={a.interview_place} placeholder="예: 본사 2층 회의실"
           onSave={v => onChange(a.id, 'interview_place', v)} />
       </div>
+      {a.interview_at && (
+        <a className="cal-btn" href={makeCalUrl(a)} target="_blank" rel="noopener noreferrer">
+          📅 구글 캘린더에 면접 일정 추가
+        </a>
+      )}
       <div className="info-item full">
         <label>동승심사 내용</label>
         <textarea defaultValue={a.ride_review} placeholder="동승심사 결과, 특이사항 등"
@@ -387,6 +392,23 @@ function DateTimeField({ label, value, onSave }) {
         onBlur={e => onSave(e.target.value ? new Date(e.target.value).toISOString() : '')} />
     </div>
   )
+}
+
+function makeCalUrl(a) {
+  const start = new Date(a.interview_at)
+  const end = new Date(start.getTime() + 60 * 60 * 1000) // 1시간
+  const fmt = d => {
+    const pad = n => String(n).padStart(2, '0')
+    return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) +
+      'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + '00Z'
+  }
+  const title = encodeURIComponent(`[면접] ${a.name} (${a.position || ''})`)
+  const dates = `${fmt(start)}/${fmt(end)}`
+  const details = encodeURIComponent(
+    `지원자: ${a.name}\n연락처: ${a.phone || ''}\n지원직종: ${a.position || ''}\n나이: ${a.age || ''}\n트럭: ${a.has_truck || ''} ${a.truck_type || ''}`
+  )
+  const loc = encodeURIComponent(a.interview_place || '')
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${loc}`
 }
 
 function toLocalInput(iso) {
