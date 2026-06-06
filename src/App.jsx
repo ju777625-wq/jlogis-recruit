@@ -14,6 +14,15 @@ const STAGE_COLORS = {
 const POSITIONS = ['새벽수거', '세탁물수거', '가구배송/조립', '기타']
 const CAREER_TYPES = ['신입', '경력']
 const TRUCK_OPTIONS = ['없음', '있음']
+const STATUS_OPTIONS = ['', '재통화', '면접예정', '지원취소', '재면접의사', '결정통보다시', '면접연기']
+const STATUS_COLORS = {
+  '재통화': ['#FAEEDA', '#BA7517'],
+  '면접예정': ['#EEEDFE', '#534AB7'],
+  '지원취소': ['#FCEBEB', '#A32D2D'],
+  '재면접의사': ['#E6F1FB', '#185FA5'],
+  '결정통보다시': ['#E1F5EE', '#0F6E56'],
+  '면접연기': ['#F1EFE8', '#5F5E5A'],
+}
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
 const CALL_COLORS = {
   '연결됨': ['#E1F5EE', '#0F6E56'],
@@ -137,6 +146,7 @@ export default function App() {
           {!loading && !filtered.length && <div className="hint">해당 지원자 없음</div>}
           {filtered.map(a => {
             const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
+            const sc = STATUS_COLORS[a.status]
             return (
               <div key={a.id} className={'applicant-card' + (a.id === selectedId ? ' selected' : '')}
                 onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
@@ -144,7 +154,9 @@ export default function App() {
                 <div className="meta">
                   <span className="dot" style={{ background: fg }}></span>
                   <span className="tag" style={{ background: bg, color: fg }}>{a.stage}</span>
-                  <span>{a.region || '-'}</span>
+                  {a.status && sc && (
+                    <span className="tag" style={{ background: sc[0], color: sc[1], fontWeight: 600 }}>{a.status}</span>
+                  )}
                 </div>
                 <div className="meta sub">📞 {a.phone}</div>
               </div>
@@ -168,6 +180,11 @@ export default function App() {
                     <span>📍 {selected.region || '-'}</span>
                     <span>💼 {selected.position || '-'}</span>
                   </div>
+                  {selected.status && STATUS_COLORS[selected.status] && (
+                    <div style={{ marginTop: 6 }}>
+                      <span className="tag" style={{ background: STATUS_COLORS[selected.status][0], color: STATUS_COLORS[selected.status][1], fontWeight: 600, fontSize: 13, padding: '3px 10px' }}>{selected.status}</span>
+                    </div>
+                  )}
                 </div>
                 <button className="del-btn" onClick={() => deleteApplicant(selected.id)}>🗑 삭제</button>
               </div>
@@ -215,7 +232,14 @@ export default function App() {
 function InfoTab({ a, onChange }) {
   return (
     <>
-      <p className="section-title">기본 정보</p>
+      <p className="section-title">구직자 상태</p>
+      <div className="info-item full">
+        <select value={a.status || ''} onChange={e => onChange(a.id, 'status', e.target.value)}>
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}
+        </select>
+      </div>
+
+      <p className="section-title" style={{ marginTop: 18 }}>기본 정보</p>
       <div className="info-grid">
         <Field label="이름" value={a.name} onSave={v => onChange(a.id, 'name', v)} />
         <Field label="연락처" value={a.phone} onSave={v => onChange(a.id, 'phone', v)} />
@@ -223,7 +247,7 @@ function InfoTab({ a, onChange }) {
           onSave={v => onChange(a.id, 'age', v ? Number(v) : null)} />
         <Field label="주거지" value={a.region} placeholder="예: 서울 강서"
           onSave={v => onChange(a.id, 'region', v)} />
-        <SelectField label="지원 직종" value={a.position} options={POSITIONS}
+        <ComboField label="지원 직종" value={a.position} options={POSITIONS}
           onSave={v => onChange(a.id, 'position', v)} />
         <SelectField label="채용 단계" value={a.stage} options={STAGES}
           onSave={v => onChange(a.id, 'stage', v)} />
@@ -236,6 +260,21 @@ function InfoTab({ a, onChange }) {
         <Field label="차종" value={a.truck_type} placeholder="예: 1톤 탑차"
           onSave={v => onChange(a.id, 'truck_type', v)} />
       </div>
+
+      <p className="section-title" style={{ marginTop: 18 }}>면접 / 동승심사</p>
+      <div className="info-grid">
+        <DateTimeField label="면접 일시" value={a.interview_at}
+          onSave={v => onChange(a.id, 'interview_at', v || null)} />
+        <Field label="면접 장소" value={a.interview_place} placeholder="예: 본사 2층 회의실"
+          onSave={v => onChange(a.id, 'interview_place', v)} />
+      </div>
+      <div className="info-item full">
+        <label>동승심사 내용</label>
+        <textarea defaultValue={a.ride_review} placeholder="동승심사 결과, 특이사항 등"
+          key={'rr' + a.id} onBlur={e => onChange(a.id, 'ride_review', e.target.value)} />
+      </div>
+
+      <p className="section-title" style={{ marginTop: 18 }}>기타</p>
       <div className="info-item full">
         <label>기타 주요 경력</label>
         <textarea defaultValue={a.career_note} placeholder="이전 직장, 보유 자격증 등"
@@ -269,6 +308,47 @@ function SelectField({ label, value, options, onSave }) {
       </select>
     </div>
   )
+}
+
+// 목록에서 고르거나 직접 입력 가능한 칸
+function ComboField({ label, value, options, onSave }) {
+  const known = options.includes(value)
+  const [custom, setCustom] = useState(!known && !!value)
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      {!custom ? (
+        <select value={known ? value : ''} onChange={e => {
+          if (e.target.value === '__direct__') { setCustom(true) }
+          else onSave(e.target.value)
+        }}>
+          {options.map(o => <option key={o}>{o}</option>)}
+          <option value="__direct__">+ 직접 입력</option>
+        </select>
+      ) : (
+        <input defaultValue={known ? '' : (value || '')} placeholder="직접 입력"
+          autoFocus onBlur={e => { onSave(e.target.value); if (!e.target.value) setCustom(false) }} />
+      )}
+    </div>
+  )
+}
+
+function DateTimeField({ label, value, onSave }) {
+  // value는 ISO 문자열. datetime-local 입력은 "YYYY-MM-DDTHH:mm" 형식 필요
+  const local = value ? toLocalInput(value) : ''
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      <input type="datetime-local" defaultValue={local} key={local}
+        onBlur={e => onSave(e.target.value ? new Date(e.target.value).toISOString() : '')} />
+    </div>
+  )
+}
+
+function toLocalInput(iso) {
+  const d = new Date(iso)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function CallsTab({ calls, showForm, setShowForm, onAdd, onDelete }) {
@@ -331,9 +411,10 @@ function AddModal({ onClose, onSave }) {
   const [f, setF] = useState({
     name: '', phone: '', age: '', region: '', position: '새벽수거',
     career_type: '신입', career_years: '', career_note: '',
-    has_truck: '없음', truck_type: '', stage: '서류접수', note: '',
+    has_truck: '없음', truck_type: '', stage: '서류접수', status: '', note: '',
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const [customPos, setCustomPos] = useState(false)
 
   function save() {
     if (!f.name.trim() || !f.phone.trim()) { alert('이름과 연락처는 필수입니다'); return }
@@ -358,8 +439,18 @@ function AddModal({ onClose, onSave }) {
         <div className="modal-row"><label>주거지</label>
           <input value={f.region} onChange={e => set('region', e.target.value)} placeholder="예: 서울 강서구" /></div>
         <div className="modal-row"><label>지원 직종</label>
-          <select value={f.position} onChange={e => set('position', e.target.value)}>
-            {POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>
+          {!customPos ? (
+            <select value={f.position} onChange={e => {
+              if (e.target.value === '__direct__') { setCustomPos(true); set('position', '') }
+              else set('position', e.target.value)
+            }}>
+              {POSITIONS.map(p => <option key={p}>{p}</option>)}
+              <option value="__direct__">+ 직접 입력</option>
+            </select>
+          ) : (
+            <input value={f.position} autoFocus onChange={e => set('position', e.target.value)} placeholder="직접 입력" />
+          )}
+        </div>
         <div className="modal-row"><label>경력 구분</label>
           <select value={f.career_type} onChange={e => set('career_type', e.target.value)}>
             {CAREER_TYPES.map(c => <option key={c}>{c}</option>)}</select></div>
@@ -370,6 +461,9 @@ function AddModal({ onClose, onSave }) {
             {TRUCK_OPTIONS.map(t => <option key={t}>{t}</option>)}</select></div>
         <div className="modal-row"><label>차종</label>
           <input value={f.truck_type} onChange={e => set('truck_type', e.target.value)} placeholder="예: 1톤 탑차" /></div>
+        <div className="modal-row"><label>구직자 상태</label>
+          <select value={f.status} onChange={e => set('status', e.target.value)}>
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}</select></div>
         <div className="modal-row"><label>기타 주요 경력</label>
           <input value={f.career_note} onChange={e => set('career_note', e.target.value)} placeholder="이전 직장, 자격증 등" /></div>
         <div className="modal-btns">
