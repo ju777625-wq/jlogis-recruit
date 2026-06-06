@@ -28,11 +28,8 @@ const VIEWS = [
   { key: '전체', label: '전체' },
   { key: 's:재통화', label: '재통화' },
   { key: 's:면접예정', label: '면접예정' },
-  { key: 's:재면접의사', label: '재면접의사' },
-  { key: 's:결정통보다시', label: '결정통보다시' },
   { key: 's:면접연기', label: '면접연기' },
   { key: 's:지원취소', label: '지원취소' },
-  { key: 'interview7', label: '최근1주일 면접자' },
   { key: 'undecided', label: '면접후 미결정' },
 ]
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
