@@ -147,18 +147,29 @@ export default function App() {
           {filtered.map(a => {
             const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
             const sc = STATUS_COLORS[a.status]
+            const line2 = [a.stage, a.age ? a.age + '세' : null, a.position].filter(Boolean).join(' · ')
             return (
               <div key={a.id} className={'applicant-card' + (a.id === selectedId ? ' selected' : '')}
                 onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
-                <div className="name">{a.name}</div>
-                <div className="meta">
-                  <span className="dot" style={{ background: fg }}></span>
-                  <span className="tag" style={{ background: bg, color: fg }}>{a.stage}</span>
+                <div className="card-top">
+                  <span className="name">{a.name}</span>
                   {a.status && sc && (
                     <span className="tag" style={{ background: sc[0], color: sc[1], fontWeight: 600 }}>{a.status}</span>
                   )}
                 </div>
-                <div className="meta sub">📞 {a.phone}</div>
+                <div className="meta">
+                  <span className="dot" style={{ background: fg }}></span>
+                  <span style={{ color: fg, fontWeight: 500 }}>{a.stage}</span>
+                  {a.age ? <span>· {a.age}세</span> : null}
+                  {a.position ? <span>· {a.position}</span> : null}
+                </div>
+                <div className="meta sub">
+                  <a className="phone-link" href={'tel:' + (a.phone || '')}
+                    onClick={e => e.stopPropagation()}>📞 {a.phone}</a>
+                  {a.has_truck === '있음' && (
+                    <span>· 🚚 {a.truck_type || '있음'}</span>
+                  )}
+                </div>
               </div>
             )
           })}
@@ -176,7 +187,7 @@ export default function App() {
                 <div>
                   <div className="detail-name">{selected.name}</div>
                   <div className="detail-meta">
-                    <span>📞 {selected.phone}</span>
+                    <span><a className="phone-link" href={'tel:' + (selected.phone || '')}>📞 {selected.phone}</a></span>
                     <span>📍 {selected.region || '-'}</span>
                     <span>💼 {selected.position || '-'}</span>
                   </div>
@@ -310,7 +321,6 @@ function SelectField({ label, value, options, onSave }) {
   )
 }
 
-// 목록에서 고르거나 직접 입력 가능한 칸
 function ComboField({ label, value, options, onSave }) {
   const known = options.includes(value)
   const [custom, setCustom] = useState(!known && !!value)
@@ -334,7 +344,6 @@ function ComboField({ label, value, options, onSave }) {
 }
 
 function DateTimeField({ label, value, onSave }) {
-  // value는 ISO 문자열. datetime-local 입력은 "YYYY-MM-DDTHH:mm" 형식 필요
   const local = value ? toLocalInput(value) : ''
   return (
     <div className="info-item">
