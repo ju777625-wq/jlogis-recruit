@@ -12,6 +12,8 @@ const STAGE_COLORS = {
   '불합격': ['#FCEBEB', '#A32D2D'],
 }
 const POSITIONS = ['새벽수거', '세탁물수거', '가구배송/조립', '기타']
+const CAREER_TYPES = ['신입', '경력']
+const TRUCK_OPTIONS = ['없음', '있음']
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
 const CALL_COLORS = {
   '연결됨': ['#E1F5EE', '#0F6E56'],
@@ -214,29 +216,43 @@ function InfoTab({ a, onChange }) {
       <div className="info-grid">
         <Field label="이름" value={a.name} onSave={v => onChange(a.id, 'name', v)} />
         <Field label="연락처" value={a.phone} onSave={v => onChange(a.id, 'phone', v)} />
-        <Field label="담당 지역" value={a.region} placeholder="예: 서울 강서"
+        <Field label="나이" value={a.age} type="number" placeholder="예: 45"
+          onSave={v => onChange(a.id, 'age', v ? Number(v) : null)} />
+        <Field label="주거지" value={a.region} placeholder="예: 서울 강서"
           onSave={v => onChange(a.id, 'region', v)} />
         <SelectField label="지원 직종" value={a.position} options={POSITIONS}
           onSave={v => onChange(a.id, 'position', v)} />
         <SelectField label="채용 단계" value={a.stage} options={STAGES}
           onSave={v => onChange(a.id, 'stage', v)} />
-        <Field label="추천인" value={a.referrer} placeholder="추천인 이름"
-          onSave={v => onChange(a.id, 'referrer', v)} />
+        <SelectField label="경력 구분" value={a.career_type || '신입'} options={CAREER_TYPES}
+          onSave={v => onChange(a.id, 'career_type', v)} />
+        <Field label="경력 연수(년)" value={a.career_years} type="number" placeholder="예: 3"
+          onSave={v => onChange(a.id, 'career_years', v ? Number(v) : 0)} />
+        <SelectField label="트럭 소유" value={a.has_truck || '없음'} options={TRUCK_OPTIONS}
+          onSave={v => onChange(a.id, 'has_truck', v)} />
+        <Field label="차종" value={a.truck_type} placeholder="예: 1톤 탑차"
+          onSave={v => onChange(a.id, 'truck_type', v)} />
+      </div>
+      <div className="info-item full">
+        <label>기타 주요 경력</label>
+        <textarea defaultValue={a.career_note} placeholder="이전 직장, 보유 자격증 등"
+          key={'cn' + a.id} onBlur={e => onChange(a.id, 'career_note', e.target.value)} />
       </div>
       <div className="info-item full">
         <label>메모</label>
-        <textarea defaultValue={a.note} onBlur={e => onChange(a.id, 'note', e.target.value)} />
+        <textarea defaultValue={a.note} key={'nt' + a.id}
+          onBlur={e => onChange(a.id, 'note', e.target.value)} />
       </div>
     </>
   )
 }
 
-function Field({ label, value, placeholder, onSave }) {
+function Field({ label, value, placeholder, type, onSave }) {
   return (
     <div className="info-item">
       <label>{label}</label>
-      <input defaultValue={value || ''} placeholder={placeholder}
-        key={value} onBlur={e => onSave(e.target.value)} />
+      <input type={type || 'text'} defaultValue={value ?? ''} placeholder={placeholder}
+        key={String(value)} onBlur={e => onSave(e.target.value)} />
     </div>
   )
 }
@@ -309,12 +325,21 @@ function CallsTab({ calls, showForm, setShowForm, onAdd, onDelete }) {
 }
 
 function AddModal({ onClose, onSave }) {
-  const [f, setF] = useState({ name: '', phone: '', region: '', position: '새벽수거', referrer: '', stage: '서류접수', note: '' })
+  const [f, setF] = useState({
+    name: '', phone: '', age: '', region: '', position: '새벽수거',
+    career_type: '신입', career_years: '', career_note: '',
+    has_truck: '없음', truck_type: '', stage: '서류접수', note: '',
+  })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
   function save() {
     if (!f.name.trim() || !f.phone.trim()) { alert('이름과 연락처는 필수입니다'); return }
-    onSave(f)
+    const payload = {
+      ...f,
+      age: f.age ? Number(f.age) : null,
+      career_years: f.career_years ? Number(f.career_years) : 0,
+    }
+    onSave(payload)
   }
 
   return (
@@ -325,13 +350,25 @@ function AddModal({ onClose, onSave }) {
           <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="홍길동" /></div>
         <div className="modal-row"><label>연락처 *</label>
           <input value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" /></div>
-        <div className="modal-row"><label>담당 지역</label>
+        <div className="modal-row"><label>나이</label>
+          <input type="number" value={f.age} onChange={e => set('age', e.target.value)} placeholder="예: 45" /></div>
+        <div className="modal-row"><label>주거지</label>
           <input value={f.region} onChange={e => set('region', e.target.value)} placeholder="예: 서울 강서구" /></div>
         <div className="modal-row"><label>지원 직종</label>
           <select value={f.position} onChange={e => set('position', e.target.value)}>
             {POSITIONS.map(p => <option key={p}>{p}</option>)}</select></div>
-        <div className="modal-row"><label>추천인</label>
-          <input value={f.referrer} onChange={e => set('referrer', e.target.value)} placeholder="추천인 이름 (선택)" /></div>
+        <div className="modal-row"><label>경력 구분</label>
+          <select value={f.career_type} onChange={e => set('career_type', e.target.value)}>
+            {CAREER_TYPES.map(c => <option key={c}>{c}</option>)}</select></div>
+        <div className="modal-row"><label>경력 연수(년)</label>
+          <input type="number" value={f.career_years} onChange={e => set('career_years', e.target.value)} placeholder="예: 3" /></div>
+        <div className="modal-row"><label>트럭 소유</label>
+          <select value={f.has_truck} onChange={e => set('has_truck', e.target.value)}>
+            {TRUCK_OPTIONS.map(t => <option key={t}>{t}</option>)}</select></div>
+        <div className="modal-row"><label>차종</label>
+          <input value={f.truck_type} onChange={e => set('truck_type', e.target.value)} placeholder="예: 1톤 탑차" /></div>
+        <div className="modal-row"><label>기타 주요 경력</label>
+          <input value={f.career_note} onChange={e => set('career_note', e.target.value)} placeholder="이전 직장, 자격증 등" /></div>
         <div className="modal-btns">
           <button className="cancel-btn" onClick={onClose}>취소</button>
           <button className="save-btn" onClick={save}>등록</button>
