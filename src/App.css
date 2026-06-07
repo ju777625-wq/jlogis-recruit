@@ -120,3 +120,44 @@ button { font-family: inherit; }
 .cal-btn:hover { background: #d4e6f9; }
 
 .stage-step .stage-date { font-size: 9px; opacity: 0.85; margin-top: 2px; }
+
+/* 화면 전환 버튼 */
+.screen-toggle { display: flex; gap: 6px; margin-top: 8px; }
+.screen-toggle button { flex: 1; padding: 8px; font-size: 13px; background: #fff; color: #555; border: 1px solid #e5e3dc; border-radius: 8px; cursor: pointer; }
+.screen-toggle button.on { background: #1D9E75; color: #fff; border-color: #1D9E75; font-weight: 600; }
+
+/* 달력 */
+.cal-wrap { display: flex; flex-direction: column; height: 100%; padding: 18px 22px; overflow-y: auto; }
+.cal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.cal-head button { width: 34px; height: 34px; font-size: 18px; background: #faf9f5; border: 1px solid #e5e3dc; border-radius: 8px; cursor: pointer; }
+.cal-head .cal-title { font-size: 18px; font-weight: 600; margin: 0 6px; }
+.cal-head .cal-today { width: auto; padding: 0 12px; font-size: 13px; font-weight: 500; }
+.cal-legend { display: flex; gap: 16px; font-size: 12px; color: #666; margin-bottom: 10px; }
+.cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lg { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.lg-iv { background: #EEEDFE; border: 1px solid #534AB7; }
+.lg-cs { background: #FAEEDA; border: 1px solid #BA7517; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.cal-dow { margin-bottom: 4px; }
+.cal-dowcell { text-align: center; font-size: 12px; font-weight: 600; color: #888; padding: 4px 0; }
+.cal-dowcell.sun { color: #c0392b; }
+.cal-dowcell.sat { color: #2471a3; }
+.cal-body { flex: 1; gap: 1px; background: #ececec; border: 1px solid #ececec; border-radius: 8px; overflow: hidden; }
+.cal-cell { background: #fff; min-height: 92px; padding: 4px 5px; display: flex; flex-direction: column; gap: 2px; }
+.cal-cell.empty { background: #faf9f7; }
+.cal-cell.today { background: #f0faf6; }
+.cal-daynum { font-size: 12px; color: #444; font-weight: 500; }
+.cal-daynum.sun { color: #c0392b; }
+.cal-daynum.sat { color: #2471a3; }
+.cal-cell.today .cal-daynum { color: #1D9E75; font-weight: 700; }
+.cal-ev { font-size: 11px; padding: 2px 5px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev.iv { background: #EEEDFE; color: #534AB7; }
+.cal-ev.cs { background: #FAEEDA; color: #BA7517; }
+.cal-ev:hover { filter: brightness(0.95); }
+
+@media (max-width: 720px) {
+  .cal-wrap { padding: 12px; }
+  .cal-cell { min-height: 60px; padding: 3px; }
+  .cal-ev { font-size: 9px; padding: 1px 3px; }
+  .cal-daynum { font-size: 11px; }
+}
