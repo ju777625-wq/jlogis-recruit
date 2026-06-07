@@ -54,6 +54,7 @@ export default function App() {
   const [calls, setCalls] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [view, setView] = useState('전체')
+  const [screen, setScreen] = useState('list') // 'list' | 'calendar'
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState('info')
   const [showModal, setShowModal] = useState(false)
@@ -166,7 +167,7 @@ export default function App() {
   const detailOpen = !!selected
 
   return (
-    <div className={'app' + (detailOpen ? ' detail-open' : '')}>
+    <div className={'app' + ((detailOpen || screen === 'calendar') ? ' detail-open' : '')}>
       <div className="sidebar">
         <div className="sidebar-header">
           <h2>👥 구직자 관리</h2>
@@ -175,6 +176,10 @@ export default function App() {
               onChange={e => setSearch(e.target.value)} />
           </div>
           <button className="add-btn" onClick={() => setShowModal(true)}>+ 지원자 등록</button>
+          <div className="screen-toggle">
+            <button className={screen === 'list' ? 'on' : ''} onClick={() => setScreen('list')}>📋 명단</button>
+            <button className={screen === 'calendar' ? 'on' : ''} onClick={() => { setScreen('calendar'); setSelectedId(null) }}>📅 달력</button>
+          </div>
         </div>
 
         <div className="stage-filter">
@@ -229,7 +234,9 @@ export default function App() {
       </div>
 
       <div className="main">
-        {!selected ? (
+        {screen === 'calendar' ? (
+          <CalendarView applicants={applicants} onPick={(id) => { setScreen('list'); setSelectedId(id); setActiveTab('info') }} onBack={() => setScreen('list')} />
+        ) : !selected ? (
           <div className="empty">지원자를 선택하세요</div>
         ) : (
           <>
@@ -494,6 +501,87 @@ function DateTimeField({ label, value, onSave }) {
       </div>
     </>
   )
+}
+
+function CalendarView({ applicants, onPick, onBack }) {
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+
+  // 날짜별 일정 모으기
+  const events = {}
+  function add(dateKey, ev) { (events[dateKey] = events[dateKey] || []).push(ev) }
+  applicants.forEach(a => {
+    if (a.interview_at) {
+      const d = new Date(a.interview_at)
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+      add(key, { id: a.id, name: a.name, type: '면접', time: hm(d) })
+    }
+    if (a.consult_at) {
+      const d = new Date(a.consult_at)
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+      add(key, { id: a.id, name: a.name, type: '전화상담', time: hm(d) })
+    }
+  })
+
+  const first = new Date(cursor.y, cursor.m, 1)
+  const startDow = first.getDay()
+  const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const today = new Date()
+  const isToday = d => d === today.getDate() && cursor.m === today.getMonth() && cursor.y === today.getFullYear()
+
+  function move(diff) {
+    let m = cursor.m + diff, y = cursor.y
+    if (m < 0) { m = 11; y-- }
+    if (m > 11) { m = 0; y++ }
+    setCursor({ y, m })
+  }
+
+  const DOW = ['일', '월', '화', '수', '목', '금', '토']
+
+  return (
+    <div className="cal-wrap">
+      <button className="back-btn" onClick={onBack}>← 명단</button>
+      <div className="cal-head">
+        <button onClick={() => move(-1)}>‹</button>
+        <span className="cal-title">{cursor.y}년 {cursor.m + 1}월</span>
+        <button onClick={() => move(1)}>›</button>
+        <button className="cal-today" onClick={() => { const d = new Date(); setCursor({ y: d.getFullYear(), m: d.getMonth() }) }}>오늘</button>
+      </div>
+      <div className="cal-legend">
+        <span><i className="lg lg-iv" /> 면접</span>
+        <span><i className="lg lg-cs" /> 전화상담</span>
+      </div>
+      <div className="cal-grid cal-dow">
+        {DOW.map((d, i) => <div key={d} className={'cal-dowcell' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>{d}</div>)}
+      </div>
+      <div className="cal-grid cal-body">
+        {cells.map((d, i) => {
+          const key = d ? `${cursor.y}-${cursor.m}-${d}` : 'e' + i
+          const evs = d ? (events[key] || []) : []
+          return (
+            <div key={key} className={'cal-cell' + (d && isToday(d) ? ' today' : '') + (!d ? ' empty' : '')}>
+              {d && <div className={'cal-daynum' + (i % 7 === 0 ? ' sun' : i % 7 === 6 ? ' sat' : '')}>{d}</div>}
+              {evs.map((ev, j) => (
+                <div key={j} className={'cal-ev ' + (ev.type === '면접' ? 'iv' : 'cs')}
+                  onClick={() => onPick(ev.id)} title={ev.type + ' ' + ev.name}>
+                  {ev.time} {ev.name}
+                </div>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function hm(d) {
+  const pad = n => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function makeCalUrl(a, kind) {
