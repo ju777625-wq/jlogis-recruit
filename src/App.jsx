@@ -210,27 +210,18 @@ export default function App() {
             const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
             const sc = STATUS_COLORS[a.status]
             return (
-              <div key={a.id} className={'applicant-card' + (a.id === selectedId ? ' selected' : '')}
+              <div key={a.id} className={'applicant-card row' + (a.id === selectedId ? ' selected' : '')}
                 onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
-                <div className="card-top">
-                  <span className="name">{a.name}</span>
-                  {a.status && sc && (
-                    <span className="tag" style={{ background: sc[0], color: sc[1], fontWeight: 600 }}>{a.status}</span>
-                  )}
-                </div>
-                <div className="meta">
-                  <span className="dot" style={{ background: fg }}></span>
-                  <span style={{ color: fg, fontWeight: 500 }}>{a.stage}</span>
-                  {a.age ? <span>· {a.age}세</span> : null}
-                  {a.position ? <span>· {a.position}</span> : null}
-                </div>
-                <div className="meta sub">
-                  <a className="phone-link" href={'tel:' + (a.phone || '')}
-                    onClick={e => e.stopPropagation()}>📞 {a.phone}</a>
-                  {a.has_truck === '있음' && (
-                    <span>· 🚚 {a.truck_type || '있음'}</span>
-                  )}
-                </div>
+                <span className="c-name">{a.name}</span>
+                <a className="c-phone phone-link" href={'tel:' + (a.phone || '')}
+                  onClick={e => e.stopPropagation()}>{a.phone}</a>
+                {a.status && sc ? (
+                  <span className="c-status tag" style={{ background: sc[0], color: sc[1], fontWeight: 600 }}>{a.status}</span>
+                ) : (
+                  <span className="c-status tag" style={{ background: bg, color: fg }}>{a.stage}</span>
+                )}
+                {a.age ? <span className="c-age">{a.age}세</span> : <span className="c-age" />}
+                <span className="c-pos">{a.position || ''}</span>
               </div>
             )
           })}
