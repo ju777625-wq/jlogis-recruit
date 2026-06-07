@@ -23,7 +23,6 @@ const STATUS_COLORS = {
   '결정통보다시': ['#E1F5EE', '#0F6E56'],
   '면접연기': ['#F1EFE8', '#5F5E5A'],
 }
-// 모아보기 종류
 const VIEWS = [
   { key: '전체', label: '전체' },
   { key: 's:재통화', label: '재통화' },
@@ -39,6 +38,15 @@ const CALL_COLORS = {
   '콜백 예정': ['#EEEDFE', '#534AB7'],
   '거절': ['#FCEBEB', '#A32D2D'],
   '기타': ['#F1EFE8', '#5F5E5A'],
+}
+
+// 전화번호 자동 하이픈
+function formatPhone(v) {
+  const n = (v || '').replace(/[^0-9]/g, '').slice(0, 11)
+  if (n.length < 4) return n
+  if (n.length < 7) return n.slice(0, 3) + '-' + n.slice(3)
+  if (n.length < 11) return n.slice(0, 3) + '-' + n.slice(3, 6) + '-' + n.slice(6)
+  return n.slice(0, 3) + '-' + n.slice(3, 7) + '-' + n.slice(7)
 }
 
 export default function App() {
@@ -86,19 +94,13 @@ export default function App() {
   function matchView(a) {
     if (view === '전체') return true
     if (view.startsWith('s:')) return a.status === view.slice(2)
-    if (view === 'interview7') {
-      if (!a.interview_at) return false
-      const t = new Date(a.interview_at).getTime()
-      const now = Date.now()
-      const weekAgo = now - 7 * 24 * 60 * 60 * 1000
-      return t >= weekAgo && t <= now + 24 * 60 * 60 * 1000
-    }
+    if (view.startsWith('stage:')) return a.stage === view.slice(6)
     if (view === 'undecided') return a.stage === '면접'
     return true
   }
 
   const filtered = applicants.filter(a => {
-    const mq = !search || a.name.includes(search) || a.phone.includes(search)
+    const mq = !search || a.name.includes(search) || (a.phone || '').includes(search)
     return mq && matchView(a)
   })
 
@@ -106,19 +108,22 @@ export default function App() {
     return applicants.filter(a => {
       if (key === '전체') return true
       if (key.startsWith('s:')) return a.status === key.slice(2)
-      if (key === 'interview7') {
-        if (!a.interview_at) return false
-        const t = new Date(a.interview_at).getTime()
-        const now = Date.now()
-        return t >= now - 7 * 24 * 60 * 60 * 1000 && t <= now + 24 * 60 * 60 * 1000
-      }
+      if (key.startsWith('stage:')) return a.stage === key.slice(6)
       if (key === 'undecided') return a.stage === '면접'
       return false
     }).length
   }
 
   async function addApplicant(form) {
-    const { data, error } = await supabase.from('applicants').insert([form]).select()
+    // 중복 체크 (연락처)
+    const phoneDigits = (form.phone || '').replace(/[^0-9]/g, '')
+    const dup = applicants.find(a => (a.phone || '').replace(/[^0-9]/g, '') === phoneDigits && phoneDigits)
+    if (dup) {
+      if (!confirm(`이미 등록된 연락처입니다.\n(${dup.name} / ${dup.phone})\n그래도 등록할까요?`)) return
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    const payload = { ...form, stage_dates: { [form.stage || '서류접수']: today } }
+    const { data, error } = await supabase.from('applicants').insert([payload]).select()
     if (error) { alert('등록 실패: ' + error.message); return }
     await loadData()
     if (data && data[0]) { setSelectedId(data[0].id); setActiveTab('info') }
@@ -128,6 +133,15 @@ export default function App() {
   async function updateField(id, field, value) {
     setApplicants(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a))
     await supabase.from('applicants').update({ [field]: value }).eq('id', id)
+  }
+
+  // 단계 변경: 단계 + 그 단계로 넘긴 날짜 기록
+  async function changeStage(a, newStage) {
+    const today = new Date().toISOString().slice(0, 10)
+    const sd = { ...(a.stage_dates || {}) }
+    if (!sd[newStage]) sd[newStage] = today
+    setApplicants(prev => prev.map(x => x.id === a.id ? { ...x, stage: newStage, stage_dates: sd } : x))
+    await supabase.from('applicants').update({ stage: newStage, stage_dates: sd }).eq('id', a.id)
   }
 
   async function deleteApplicant(id) {
@@ -165,12 +179,20 @@ export default function App() {
 
         <div className="stage-filter">
           <p>모아보기</p>
-          {VIEWS.map(v => {
-            const cnt = viewCount(v.key)
+          {VIEWS.map(v => (
+            <span key={v.key} className={'stage-pill' + (view === v.key ? ' active' : '')}
+              onClick={() => setView(v.key)}>
+              {v.label} {viewCount(v.key)}
+            </span>
+          ))}
+          <p style={{ marginTop: 10 }}>채용 단계별</p>
+          {STAGES.map(s => {
+            const [bg, fg] = STAGE_COLORS[s]
             return (
-              <span key={v.key} className={'stage-pill' + (view === v.key ? ' active' : '')}
-                onClick={() => setView(v.key)}>
-                {v.label} {cnt}
+              <span key={s} className={'stage-pill' + (view === 'stage:' + s ? ' active' : '')}
+                style={{ background: bg, color: fg }}
+                onClick={() => setView('stage:' + s)}>
+                {s} {viewCount('stage:' + s)}
               </span>
             )
           })}
@@ -238,9 +260,13 @@ export default function App() {
                 {STAGES.map((s, i) => {
                   const idx = STAGES.indexOf(selected.stage)
                   const cls = i < idx ? 'done' : i === idx ? 'current' : 'future'
+                  const d = (selected.stage_dates || {})[s]
                   return (
                     <div key={s} className={'stage-step ' + cls}
-                      onClick={() => updateField(selected.id, 'stage', s)}>{s}</div>
+                      onClick={() => changeStage(selected, s)}>
+                      <div>{s}</div>
+                      {d && <div className="stage-date">{d.slice(5)}</div>}
+                    </div>
                   )
                 })}
               </div>
@@ -249,6 +275,8 @@ export default function App() {
             <div className="tabs">
               <div className={'tab' + (activeTab === 'info' ? ' active' : '')}
                 onClick={() => setActiveTab('info')}>기본 정보</div>
+              <div className={'tab' + (activeTab === 'stage' ? ' active' : '')}
+                onClick={() => setActiveTab('stage')}>현재 단계 할 일</div>
               <div className={'tab' + (activeTab === 'calls' ? ' active' : '')}
                 onClick={() => setActiveTab('calls')}>통화 이력 ({selectedCalls.length})</div>
             </div>
@@ -256,6 +284,8 @@ export default function App() {
             <div className="tab-content">
               {activeTab === 'info' ? (
                 <InfoTab a={selected} onChange={updateField} />
+              ) : activeTab === 'stage' ? (
+                <StageTab a={selected} onChange={updateField} />
               ) : (
                 <CallsTab
                   calls={selectedCalls}
@@ -270,8 +300,65 @@ export default function App() {
         )}
       </div>
 
-      {showModal && <AddModal onClose={() => setShowModal(false)} onSave={addApplicant} />}
+      {showModal && <AddModal onClose={() => setShowModal(false)} onSave={addApplicant} existing={applicants} />}
     </div>
+  )
+}
+
+// 현재 단계에 맞는 할 일 입력칸만 보여주는 탭
+function StageTab({ a, onChange }) {
+  const stage = a.stage
+  return (
+    <>
+      <p className="section-title">현재 단계: {stage}</p>
+      {stage === '전화상담' && (
+        <>
+          <div className="info-grid">
+            <DateTimeField label="전화상담 일시" value={a.consult_at}
+              onSave={v => onChange(a.id, 'consult_at', v || null)} />
+            <Field label="상담 방법/장소" value={a.consult_place} placeholder="예: 유선"
+              onSave={v => onChange(a.id, 'consult_place', v)} />
+          </div>
+          {a.consult_at && (
+            <a className="cal-btn" href={makeCalUrl(a, 'consult')} target="_blank" rel="noopener noreferrer">
+              📅 구글 캘린더에 전화상담 일정 추가
+            </a>
+          )}
+        </>
+      )}
+      {stage === '면접' && (
+        <>
+          <div className="info-grid">
+            <DateTimeField label="면접 일시" value={a.interview_at}
+              onSave={v => onChange(a.id, 'interview_at', v || null)} />
+            <Field label="면접 장소" value={a.interview_place} placeholder="예: 본사 2층"
+              onSave={v => onChange(a.id, 'interview_place', v)} />
+          </div>
+          {a.interview_at && (
+            <a className="cal-btn" href={makeCalUrl(a, 'interview')} target="_blank" rel="noopener noreferrer">
+              📅 구글 캘린더에 면접 일정 추가
+            </a>
+          )}
+        </>
+      )}
+      {stage === '동승심사' && (
+        <div className="info-item full">
+          <label>동승심사 내용</label>
+          <textarea defaultValue={a.ride_review} placeholder="동승심사 결과, 특이사항 등"
+            key={'rr2' + a.id} onBlur={e => onChange(a.id, 'ride_review', e.target.value)} />
+        </div>
+      )}
+      {(stage === '서류접수' || stage === '채용완료' || stage === '불합격') && (
+        <div className="hint" style={{ textAlign: 'left', padding: '8px 0' }}>
+          이 단계에서는 별도 입력 항목이 없습니다. 상단 단계바를 눌러 단계를 옮기거나, '기본 정보' 탭에서 내용을 수정하세요.
+        </div>
+      )}
+      <div className="info-item full" style={{ marginTop: 14 }}>
+        <label>메모</label>
+        <textarea defaultValue={a.note} key={'note2' + a.id}
+          onBlur={e => onChange(a.id, 'note', e.target.value)} />
+      </div>
+    </>
   )
 }
 
@@ -288,15 +375,13 @@ function InfoTab({ a, onChange }) {
       <p className="section-title" style={{ marginTop: 18 }}>기본 정보</p>
       <div className="info-grid">
         <Field label="이름" value={a.name} onSave={v => onChange(a.id, 'name', v)} />
-        <Field label="연락처" value={a.phone} onSave={v => onChange(a.id, 'phone', v)} />
+        <PhoneField label="연락처" value={a.phone} onSave={v => onChange(a.id, 'phone', v)} />
         <Field label="나이" value={a.age} type="number" placeholder="예: 45"
           onSave={v => onChange(a.id, 'age', v ? Number(v) : null)} />
         <Field label="주거지" value={a.region} placeholder="예: 서울 강서"
           onSave={v => onChange(a.id, 'region', v)} />
         <ComboField label="지원 직종" value={a.position} options={POSITIONS}
           onSave={v => onChange(a.id, 'position', v)} />
-        <SelectField label="채용 단계" value={a.stage} options={STAGES}
-          onSave={v => onChange(a.id, 'stage', v)} />
         <SelectField label="경력 구분" value={a.career_type || '신입'} options={CAREER_TYPES}
           onSave={v => onChange(a.id, 'career_type', v)} />
         <Field label="경력 연수(년)" value={a.career_years} type="number" placeholder="예: 3"
@@ -305,24 +390,6 @@ function InfoTab({ a, onChange }) {
           onSave={v => onChange(a.id, 'has_truck', v)} />
         <Field label="차종" value={a.truck_type} placeholder="예: 1톤 탑차"
           onSave={v => onChange(a.id, 'truck_type', v)} />
-      </div>
-
-      <p className="section-title" style={{ marginTop: 18 }}>면접 / 동승심사</p>
-      <div className="info-grid">
-        <DateTimeField label="면접 일시" value={a.interview_at}
-          onSave={v => onChange(a.id, 'interview_at', v || null)} />
-        <Field label="면접 장소" value={a.interview_place} placeholder="예: 본사 2층 회의실"
-          onSave={v => onChange(a.id, 'interview_place', v)} />
-      </div>
-      {a.interview_at && (
-        <a className="cal-btn" href={makeCalUrl(a)} target="_blank" rel="noopener noreferrer">
-          📅 구글 캘린더에 면접 일정 추가
-        </a>
-      )}
-      <div className="info-item full">
-        <label>동승심사 내용</label>
-        <textarea defaultValue={a.ride_review} placeholder="동승심사 결과, 특이사항 등"
-          key={'rr' + a.id} onBlur={e => onChange(a.id, 'ride_review', e.target.value)} />
       </div>
 
       <p className="section-title" style={{ marginTop: 18 }}>기타</p>
@@ -346,6 +413,20 @@ function Field({ label, value, placeholder, type, onSave }) {
       <label>{label}</label>
       <input type={type || 'text'} defaultValue={value ?? ''} placeholder={placeholder}
         key={String(value)} onBlur={e => onSave(e.target.value)} />
+    </div>
+  )
+}
+
+// 전화번호 전용: 입력하는 동안 자동으로 하이픈
+function PhoneField({ label, value, onSave }) {
+  const [v, setV] = useState(value || '')
+  useEffect(() => { setV(value || '') }, [value])
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      <input type="tel" value={v}
+        onChange={e => setV(formatPhone(e.target.value))}
+        onBlur={() => onSave(v)} placeholder="010-0000-0000" />
     </div>
   )
 }
@@ -383,38 +464,61 @@ function ComboField({ label, value, options, onSave }) {
   )
 }
 
+// 날짜 + 30분 단위 시간 선택
 function DateTimeField({ label, value, onSave }) {
-  const local = value ? toLocalInput(value) : ''
+  const d = value ? new Date(value) : null
+  const pad = n => String(n).padStart(2, '0')
+  const datePart = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : ''
+  const timePart = d ? `${pad(d.getHours())}:${pad(Math.floor(d.getMinutes() / 30) * 30)}` : ''
+
+  function emit(dateStr, timeStr) {
+    if (!dateStr || !timeStr) { onSave(''); return }
+    const iso = new Date(`${dateStr}T${timeStr}`).toISOString()
+    onSave(iso)
+  }
+
+  const TIMES = []
+  for (let h = 6; h <= 22; h++) {
+    TIMES.push(`${pad(h)}:00`)
+    TIMES.push(`${pad(h)}:30`)
+  }
+
   return (
-    <div className="info-item">
-      <label>{label}</label>
-      <input type="datetime-local" defaultValue={local} key={local}
-        onBlur={e => onSave(e.target.value ? new Date(e.target.value).toISOString() : '')} />
-    </div>
+    <>
+      <div className="info-item">
+        <label>{label} (날짜)</label>
+        <input type="date" defaultValue={datePart} key={'d' + datePart}
+          onChange={e => emit(e.target.value, timePart || '09:00')} />
+      </div>
+      <div className="info-item">
+        <label>{label} (시간)</label>
+        <select value={timePart} onChange={e => emit(datePart || new Date().toISOString().slice(0, 10), e.target.value)}>
+          <option value="">선택</option>
+          {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+    </>
   )
 }
 
-function makeCalUrl(a) {
-  const start = new Date(a.interview_at)
-  const end = new Date(start.getTime() + 60 * 60 * 1000) // 1시간
-  const fmt = d => {
+function makeCalUrl(a, kind) {
+  const at = kind === 'consult' ? a.consult_at : a.interview_at
+  const place = kind === 'consult' ? a.consult_place : a.interview_place
+  const label = kind === 'consult' ? '전화상담' : '면접'
+  const start = new Date(at)
+  const end = new Date(start.getTime() + 60 * 60 * 1000)
+  const fmt = dt => {
     const pad = n => String(n).padStart(2, '0')
-    return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) +
-      'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + '00Z'
+    return dt.getUTCFullYear() + pad(dt.getUTCMonth() + 1) + pad(dt.getUTCDate()) +
+      'T' + pad(dt.getUTCHours()) + pad(dt.getUTCMinutes()) + '00Z'
   }
-  const title = encodeURIComponent(`[면접] ${a.name} (${a.position || ''})`)
+  const title = encodeURIComponent(`[${label}] ${a.name} (${a.position || ''})`)
   const dates = `${fmt(start)}/${fmt(end)}`
   const details = encodeURIComponent(
     `지원자: ${a.name}\n연락처: ${a.phone || ''}\n지원직종: ${a.position || ''}\n나이: ${a.age || ''}\n트럭: ${a.has_truck || ''} ${a.truck_type || ''}`
   )
-  const loc = encodeURIComponent(a.interview_place || '')
+  const loc = encodeURIComponent(place || '')
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${loc}`
-}
-
-function toLocalInput(iso) {
-  const d = new Date(iso)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function CallsTab({ calls, showForm, setShowForm, onAdd, onDelete }) {
@@ -473,7 +577,7 @@ function CallsTab({ calls, showForm, setShowForm, onAdd, onDelete }) {
   )
 }
 
-function AddModal({ onClose, onSave }) {
+function AddModal({ onClose, onSave, existing }) {
   const [f, setF] = useState({
     name: '', phone: '', age: '', region: '', position: '새벽수거',
     career_type: '신입', career_years: '', career_note: '',
@@ -481,6 +585,9 @@ function AddModal({ onClose, onSave }) {
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const [customPos, setCustomPos] = useState(false)
+
+  const phoneDigits = f.phone.replace(/[^0-9]/g, '')
+  const dup = existing.find(a => (a.phone || '').replace(/[^0-9]/g, '') === phoneDigits && phoneDigits.length >= 10)
 
   function save() {
     if (!f.name.trim() || !f.phone.trim()) { alert('이름과 연락처는 필수입니다'); return }
@@ -499,7 +606,9 @@ function AddModal({ onClose, onSave }) {
         <div className="modal-row"><label>이름 *</label>
           <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="홍길동" /></div>
         <div className="modal-row"><label>연락처 *</label>
-          <input value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" /></div>
+          <input type="tel" value={f.phone} onChange={e => set('phone', formatPhone(e.target.value))} placeholder="010-0000-0000" />
+          {dup && <div style={{ color: '#A32D2D', fontSize: 12, marginTop: 4 }}>⚠️ 이미 등록된 연락처입니다 ({dup.name})</div>}
+        </div>
         <div className="modal-row"><label>나이</label>
           <input type="number" value={f.age} onChange={e => set('age', e.target.value)} placeholder="예: 45" /></div>
         <div className="modal-row"><label>주거지</label>
