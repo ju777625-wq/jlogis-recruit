@@ -213,15 +213,15 @@ export default function App() {
               <div key={a.id} className={'applicant-card row' + (a.id === selectedId ? ' selected' : '')}
                 onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
                 <span className="c-name">{a.name}</span>
-                <a className="c-phone phone-link" href={'tel:' + (a.phone || '')}
-                  onClick={e => e.stopPropagation()}>{a.phone}</a>
                 {a.status && sc ? (
                   <span className="c-status tag" style={{ background: sc[0], color: sc[1], fontWeight: 600 }}>{a.status}</span>
                 ) : (
                   <span className="c-status tag" style={{ background: bg, color: fg }}>{a.stage}</span>
                 )}
-                {a.age ? <span className="c-age">{a.age}세</span> : <span className="c-age" />}
+                <span className="c-age">{a.age ? a.age + '세' : ''}</span>
+                <span className="c-region">{a.region || ''}</span>
                 <span className="c-pos">{a.position || ''}</span>
+                <span className="c-truck">{a.has_truck === '있음' ? '🚚' : ''}</span>
               </div>
             )
           })}
