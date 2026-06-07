@@ -179,23 +179,27 @@ export default function App() {
 
         <div className="stage-filter">
           <p>모아보기</p>
-          {VIEWS.map(v => (
-            <span key={v.key} className={'stage-pill' + (view === v.key ? ' active' : '')}
-              onClick={() => setView(v.key)}>
-              {v.label} {viewCount(v.key)}
-            </span>
-          ))}
-          <p style={{ marginTop: 10 }}>채용 단계별</p>
-          {STAGES.map(s => {
-            const [bg, fg] = STAGE_COLORS[s]
-            return (
-              <span key={s} className={'stage-pill' + (view === 'stage:' + s ? ' active' : '')}
-                style={{ background: bg, color: fg }}
-                onClick={() => setView('stage:' + s)}>
-                {s} {viewCount('stage:' + s)}
+          <div className="filter-row">
+            {VIEWS.map(v => (
+              <span key={v.key} className={'stage-pill' + (view === v.key ? ' active' : '')}
+                onClick={() => setView(v.key)}>
+                {v.label} {viewCount(v.key)}
               </span>
-            )
-          })}
+            ))}
+          </div>
+          <p style={{ marginTop: 8 }}>채용 단계별</p>
+          <div className="filter-row">
+            {STAGES.map(s => {
+              const [bg, fg] = STAGE_COLORS[s]
+              return (
+                <span key={s} className={'stage-pill' + (view === 'stage:' + s ? ' active' : '')}
+                  style={{ background: bg, color: fg, borderColor: view === 'stage:' + s ? '#888' : bg }}
+                  onClick={() => setView('stage:' + s)}>
+                  {s} {viewCount('stage:' + s)}
+                </span>
+              )
+            })}
+          </div>
         </div>
 
         <div className="applicant-list">
