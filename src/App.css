@@ -2,7 +2,12 @@
 body { font-family: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif; color: #2c2c2a; background: #f7f6f2; }
 button { font-family: inherit; }
 
-.app { display: grid; grid-template-columns: 480px 1fr; height: 100vh; background: #fff; }
+.app { display: grid; grid-template-columns: var(--sidebar-w, 480px) 1fr; height: 100vh; background: #fff; position: relative; }
+
+/* 좌우 폭 조절 막대 (PC 전용) */
+.resizer { position: absolute; top: 0; left: calc(var(--sidebar-w, 480px) - 3px); width: 7px; height: 100%; cursor: col-resize; z-index: 50; background: transparent; }
+.resizer::after { content: ''; position: absolute; left: 3px; top: 0; width: 1px; height: 100%; background: #e5e3dc; }
+.resizer:hover::after, .resizer:active::after { width: 3px; left: 2px; background: #1D9E75; }
 
 .sidebar { border-right: 1px solid #e5e3dc; display: flex; flex-direction: column; background: #faf9f5; min-height: 0; }
 .sidebar-header { padding: 16px; border-bottom: 1px solid #e5e3dc; }
@@ -103,6 +108,7 @@ button { font-family: inherit; }
 
 @media (max-width: 720px) {
   .app { grid-template-columns: 1fr; height: 100vh; position: relative; }
+  .resizer { display: none; }
   .sidebar { border-right: none; height: 100vh; }
   .app.detail-open .sidebar { display: none; }
   .app:not(.detail-open) .main { display: none; }
