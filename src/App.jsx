@@ -61,6 +61,31 @@ export default function App() {
   const [showCallForm, setShowCallForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [sidebarW, setSidebarW] = useState(() => {
+    const saved = Number(localStorage.getItem('jlogis_sidebar_w'))
+    return saved >= 320 && saved <= 900 ? saved : 480
+  })
+
+  // 좌우 폭 끌어서 조절 (PC 전용)
+  function startResize(e) {
+    e.preventDefault()
+    let latest = sidebarW
+    const onMove = (ev) => {
+      const maxW = Math.min(760, window.innerWidth - 360)
+      const w = Math.min(Math.max(ev.clientX, 320), maxW)
+      latest = w
+      setSidebarW(w)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+      try { localStorage.setItem('jlogis_sidebar_w', String(latest)) } catch (err) { /* 무시 */ }
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -167,7 +192,8 @@ export default function App() {
   const detailOpen = !!selected
 
   return (
-    <div className={'app' + ((detailOpen || screen === 'calendar') ? ' detail-open' : '')}>
+    <div className={'app' + ((detailOpen || screen === 'calendar') ? ' detail-open' : '')}
+      style={{ '--sidebar-w': sidebarW + 'px' }}>
       <div className="sidebar">
         <div className="sidebar-header">
           <h2>👥 구직자 관리</h2>
@@ -232,6 +258,8 @@ export default function App() {
           })}
         </div>
       </div>
+
+      <div className="resizer" onMouseDown={startResize} title="끌어서 좌우 폭 조절" />
 
       <div className="main">
         {screen === 'calendar' ? (
