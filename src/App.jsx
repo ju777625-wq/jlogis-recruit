@@ -23,14 +23,8 @@ const STATUS_COLORS = {
   '결정통보다시': ['#E1F5EE', '#0F6E56'],
   '면접연기': ['#F1EFE8', '#5F5E5A'],
 }
-const VIEWS = [
-  { key: '전체', label: '전체' },
-  { key: 's:재통화', label: '재통화' },
-  { key: 's:면접예정', label: '면접예정' },
-  { key: 's:면접연기', label: '면접연기' },
-  { key: 's:지원취소', label: '지원취소' },
-  { key: 'undecided', label: '면접후 미결정' },
-]
+const COMPANIES = ['오늘의집', '한샘', '주원', 'TK']
+const STATUS_FILTERS = STATUS_OPTIONS.filter(s => s) // 빈값 제외
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
 const CALL_COLORS = {
   '연결됨': ['#E1F5EE', '#0F6E56'],
@@ -56,6 +50,7 @@ export default function App() {
   const [view, setView] = useState('전체')
   const [screen, setScreen] = useState('list') // 'list' | 'calendar'
   const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('info')
   const [showModal, setShowModal] = useState(false)
   const [showCallForm, setShowCallForm] = useState(false)
@@ -121,7 +116,6 @@ export default function App() {
     if (view === '전체') return true
     if (view.startsWith('s:')) return a.status === view.slice(2)
     if (view.startsWith('stage:')) return a.stage === view.slice(6)
-    if (view === 'undecided') return a.stage === '면접'
     return true
   }
 
@@ -135,7 +129,6 @@ export default function App() {
       if (key === '전체') return true
       if (key.startsWith('s:')) return a.status === key.slice(2)
       if (key.startsWith('stage:')) return a.stage === key.slice(6)
-      if (key === 'undecided') return a.stage === '면접'
       return false
     }).length
   }
@@ -196,37 +189,50 @@ export default function App() {
       style={{ '--sidebar-w': sidebarW + 'px' }}>
       <div className="sidebar">
         <div className="sidebar-header">
-          <h2>👥 구직자 관리</h2>
-          <div className="search-box">
-            <input placeholder="이름, 연락처 검색…" value={search}
-              onChange={e => setSearch(e.target.value)} />
+          <div className="topbar">
+            <h2>👥 구직자 관리</h2>
+            <div className="topbar-btns">
+              <button className={'mini-btn' + (searchOpen ? ' on' : '')} title="검색"
+                onClick={() => setSearchOpen(o => !o)}>🔍</button>
+              <button className="mini-btn" title="지원자 등록" onClick={() => setShowModal(true)}>＋</button>
+              <button className={'mini-btn' + (screen === 'calendar' ? ' on' : '')} title="달력"
+                onClick={() => { setScreen(screen === 'calendar' ? 'list' : 'calendar'); setSelectedId(null) }}>📅</button>
+            </div>
           </div>
-          <button className="add-btn" onClick={() => setShowModal(true)}>+ 지원자 등록</button>
-          <div className="screen-toggle">
-            <button className={screen === 'list' ? 'on' : ''} onClick={() => setScreen('list')}>📋 명단</button>
-            <button className={screen === 'calendar' ? 'on' : ''} onClick={() => { setScreen('calendar'); setSelectedId(null) }}>📅 달력</button>
-          </div>
+          {searchOpen && (
+            <div className="search-box">
+              <input autoFocus placeholder="이름, 연락처 검색…" value={search}
+                onChange={e => setSearch(e.target.value)} />
+            </div>
+          )}
         </div>
 
         <div className="stage-filter">
-          <p>모아보기</p>
           <div className="filter-row">
-            {VIEWS.map(v => (
-              <span key={v.key} className={'stage-pill' + (view === v.key ? ' active' : '')}
-                onClick={() => setView(v.key)}>
-                {v.label} {viewCount(v.key)}
-              </span>
-            ))}
-          </div>
-          <p style={{ marginTop: 8 }}>채용 단계별</p>
-          <div className="filter-row">
+            <span className={'stage-pill all' + (view === '전체' ? ' active' : '')}
+              onClick={() => setView('전체')}>전체 {viewCount('전체')}</span>
             {STAGES.map(s => {
               const [bg, fg] = STAGE_COLORS[s]
+              const on = view === 'stage:' + s
               return (
-                <span key={s} className={'stage-pill' + (view === 'stage:' + s ? ' active' : '')}
-                  style={{ background: bg, color: fg, borderColor: view === 'stage:' + s ? '#888' : bg }}
+                <span key={s} className={'stage-pill' + (on ? ' active' : '')}
+                  style={{ background: bg, color: fg, borderColor: on ? fg : bg }}
                   onClick={() => setView('stage:' + s)}>
                   {s} {viewCount('stage:' + s)}
+                </span>
+              )
+            })}
+          </div>
+          <div className="filter-row" style={{ marginTop: 6 }}>
+            {STATUS_FILTERS.map(s => {
+              const [bg, fg] = STATUS_COLORS[s]
+              const on = view === 's:' + s
+              const cnt = viewCount('s:' + s)
+              return (
+                <span key={s} className={'stage-pill' + (on ? ' active' : '')}
+                  style={{ background: bg, color: fg, borderColor: on ? fg : bg }}
+                  onClick={() => setView('s:' + s)}>
+                  {s} {cnt}
                 </span>
               )
             })}
@@ -240,19 +246,21 @@ export default function App() {
           {filtered.map(a => {
             const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
             const sc = STATUS_COLORS[a.status]
+            const meta = [a.age ? a.age + '세' : '', a.region, a.position, a.target_company]
+              .filter(Boolean).join(' · ')
             return (
-              <div key={a.id} className={'applicant-card row' + (a.id === selectedId ? ' selected' : '')}
+              <div key={a.id} className={'ap-card' + (a.id === selectedId ? ' selected' : '')}
                 onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
-                <span className="c-name">{a.name}</span>
-                {a.status && sc ? (
-                  <span className="c-status tag" style={{ background: sc[0], color: sc[1], fontWeight: 600 }}>{a.status}</span>
-                ) : (
-                  <span className="c-status tag" style={{ background: bg, color: fg }}>{a.stage}</span>
-                )}
-                <span className="c-age">{a.age ? a.age + '세' : ''}</span>
-                <span className="c-region">{a.region || ''}</span>
-                <span className="c-pos">{a.position || ''}</span>
-                <span className="c-truck">{a.has_truck === '있음' ? '🚚' : ''}</span>
+                <div className="ap-top">
+                  <span className="ap-name">{a.name}</span>
+                  {a.has_truck === '있음' && <span className="ap-truck">🚚</span>}
+                  {a.status && sc ? (
+                    <span className="ap-badge" style={{ background: sc[0], color: sc[1] }}>{a.status}</span>
+                  ) : (
+                    <span className="ap-badge" style={{ background: bg, color: fg }}>{a.stage}</span>
+                  )}
+                </div>
+                <div className="ap-meta">{meta || '정보 없음'}</div>
               </div>
             )
           })}
@@ -277,6 +285,7 @@ export default function App() {
                     <span><a className="phone-link" href={'tel:' + (selected.phone || '')}>📞 {selected.phone}</a></span>
                     <span>📍 {selected.region || '-'}</span>
                     <span>💼 {selected.position || '-'}</span>
+                    {selected.target_company && <span>🏢 {selected.target_company}</span>}
                   </div>
                   {selected.status && STATUS_COLORS[selected.status] && (
                     <div style={{ marginTop: 6 }}>
@@ -412,6 +421,8 @@ function InfoTab({ a, onChange }) {
           onSave={v => onChange(a.id, 'region', v)} />
         <ComboField label="지원 직종" value={a.position} options={POSITIONS}
           onSave={v => onChange(a.id, 'position', v)} />
+        <ComboField label="구직회사" value={a.target_company} options={COMPANIES}
+          onSave={v => onChange(a.id, 'target_company', v)} />
         <SelectField label="경력 구분" value={a.career_type || '신입'} options={CAREER_TYPES}
           onSave={v => onChange(a.id, 'career_type', v)} />
         <Field label="경력 연수(년)" value={a.career_years} type="number" placeholder="예: 3"
@@ -571,38 +582,117 @@ function CalendarView({ applicants, onPick, onBack }) {
   const DOW = ['일', '월', '화', '수', '목', '금', '토']
 
   return (
-    <div className="cal-wrap">
+    <div className="cal-layout">
+      <AgendaPanel applicants={applicants} onPick={onPick} onBack={onBack} />
+      <div className="cal-wrap">
+        <div className="cal-head">
+          <button onClick={() => move(-1)}>‹</button>
+          <span className="cal-title">{cursor.y}년 {cursor.m + 1}월</span>
+          <button onClick={() => move(1)}>›</button>
+          <button className="cal-today" onClick={() => { const d = new Date(); setCursor({ y: d.getFullYear(), m: d.getMonth() }) }}>오늘</button>
+        </div>
+        <div className="cal-legend">
+          <span><i className="lg lg-iv" /> 면접</span>
+          <span><i className="lg lg-cs" /> 전화상담</span>
+        </div>
+        <div className="cal-grid cal-dow">
+          {DOW.map((d, i) => <div key={d} className={'cal-dowcell' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>{d}</div>)}
+        </div>
+        <div className="cal-grid cal-body">
+          {cells.map((d, i) => {
+            const key = d ? `${cursor.y}-${cursor.m}-${d}` : 'e' + i
+            const evs = d ? (events[key] || []) : []
+            return (
+              <div key={key} className={'cal-cell' + (d && isToday(d) ? ' today' : '') + (!d ? ' empty' : '')}>
+                {d && <div className={'cal-daynum' + (i % 7 === 0 ? ' sun' : i % 7 === 6 ? ' sat' : '')}>{d}</div>}
+                {evs.map((ev, j) => (
+                  <div key={j} className={'cal-ev ' + (ev.type === '면접' ? 'iv' : 'cs')}
+                    onClick={() => onPick(ev.id)} title={ev.type + ' ' + ev.name}>
+                    <b>{ev.time}</b> {ev.name}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 날짜 차이(일): 오늘=0, 내일=1, 어제=-1
+function dayDiff(dateStr) {
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  const d = new Date(dateStr); d.setHours(0, 0, 0, 0)
+  return Math.round((d - now) / 86400000)
+}
+
+// 임박도에 따른 색 (오늘=빨강, 1~2일=주황, 3~7일=파랑, 지남=회색)
+function urgencyColor(diff) {
+  if (diff < 0) return ['#F1EFE8', '#8a8a85', '지남']
+  if (diff === 0) return ['#FCEBEB', '#C0392B', '오늘']
+  if (diff <= 2) return ['#FAEEDA', '#BA7517', 'D-' + diff]
+  return ['#E6F1FB', '#185FA5', 'D-' + diff]
+}
+
+// 달력 옆 "비서" 패널 — 이번 주 면접/전화예약을 한눈에
+function AgendaPanel({ applicants, onPick, onBack }) {
+  const items = []
+  applicants.forEach(a => {
+    if (a.interview_at) items.push({ id: a.id, name: a.name, company: a.target_company, type: '면접', at: a.interview_at })
+    if (a.consult_at) items.push({ id: a.id, name: a.name, company: a.target_company, type: '전화상담', at: a.consult_at })
+  })
+  const enriched = items
+    .map(it => ({ ...it, diff: dayDiff(it.at) }))
+    .filter(it => it.diff >= -3 && it.diff <= 7) // 지난 3일 ~ 앞으로 7일
+    .sort((x, y) => new Date(x.at) - new Date(y.at))
+
+  const upcoming = enriched.filter(it => it.diff >= 0)
+  const overdue = enriched.filter(it => it.diff < 0)
+
+  const dow = ['일', '월', '화', '수', '목', '금', '토']
+  function label(at) {
+    const d = new Date(at)
+    return `${d.getMonth() + 1}/${d.getDate()}(${dow[d.getDay()]}) ${hm(d)}`
+  }
+
+  function Row({ it }) {
+    const [bg, fg, tag] = urgencyColor(it.diff)
+    return (
+      <div className="ag-item" onClick={() => onPick(it.id)} style={{ borderLeftColor: fg }}>
+        <div className="ag-line1">
+          <span className="ag-tag" style={{ background: bg, color: fg }}>{tag}</span>
+          <span className="ag-name">{it.name}</span>
+          <span className={'ag-type ' + (it.type === '면접' ? 'iv' : 'cs')}>{it.type}</span>
+        </div>
+        <div className="ag-line2">
+          {label(it.at)}{it.company ? ' · ' + it.company : ''}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="agenda">
       <button className="back-btn" onClick={onBack}>← 명단</button>
-      <div className="cal-head">
-        <button onClick={() => move(-1)}>‹</button>
-        <span className="cal-title">{cursor.y}년 {cursor.m + 1}월</span>
-        <button onClick={() => move(1)}>›</button>
-        <button className="cal-today" onClick={() => { const d = new Date(); setCursor({ y: d.getFullYear(), m: d.getMonth() }) }}>오늘</button>
-      </div>
-      <div className="cal-legend">
-        <span><i className="lg lg-iv" /> 면접</span>
-        <span><i className="lg lg-cs" /> 전화상담</span>
-      </div>
-      <div className="cal-grid cal-dow">
-        {DOW.map((d, i) => <div key={d} className={'cal-dowcell' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>{d}</div>)}
-      </div>
-      <div className="cal-grid cal-body">
-        {cells.map((d, i) => {
-          const key = d ? `${cursor.y}-${cursor.m}-${d}` : 'e' + i
-          const evs = d ? (events[key] || []) : []
-          return (
-            <div key={key} className={'cal-cell' + (d && isToday(d) ? ' today' : '') + (!d ? ' empty' : '')}>
-              {d && <div className={'cal-daynum' + (i % 7 === 0 ? ' sun' : i % 7 === 6 ? ' sat' : '')}>{d}</div>}
-              {evs.map((ev, j) => (
-                <div key={j} className={'cal-ev ' + (ev.type === '면접' ? 'iv' : 'cs')}
-                  onClick={() => onPick(ev.id)} title={ev.type + ' ' + ev.name}>
-                  {ev.time} {ev.name}
-                </div>
-              ))}
-            </div>
-          )
-        })}
-      </div>
+      <div className="ag-head">🗒️ 이번 주 일정</div>
+      {!upcoming.length && !overdue.length && (
+        <div className="hint" style={{ padding: '14px 4px', textAlign: 'left' }}>
+          예정된 면접·전화예약이 없습니다.
+        </div>
+      )}
+      {!!upcoming.length && (
+        <div className="ag-group">
+          <div className="ag-grouptitle">다가오는 일정 ({upcoming.length})</div>
+          {upcoming.map((it, i) => <Row key={'u' + i} it={it} />)}
+        </div>
+      )}
+      {!!overdue.length && (
+        <div className="ag-group">
+          <div className="ag-grouptitle">지난 일정 ({overdue.length})</div>
+          {overdue.map((it, i) => <Row key={'o' + i} it={it} />)}
+        </div>
+      )}
     </div>
   )
 }
@@ -626,7 +716,7 @@ function makeCalUrl(a, kind) {
   const title = encodeURIComponent(`[${label}] ${a.name} (${a.position || ''})`)
   const dates = `${fmt(start)}/${fmt(end)}`
   const details = encodeURIComponent(
-    `지원자: ${a.name}\n연락처: ${a.phone || ''}\n지원직종: ${a.position || ''}\n나이: ${a.age || ''}\n트럭: ${a.has_truck || ''} ${a.truck_type || ''}`
+    `지원자: ${a.name}\n연락처: ${a.phone || ''}\n지원직종: ${a.position || ''}\n구직회사: ${a.target_company || ''}\n나이: ${a.age || ''}\n트럭: ${a.has_truck || ''} ${a.truck_type || ''}`
   )
   const loc = encodeURIComponent(place || '')
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${loc}`
@@ -691,11 +781,13 @@ function CallsTab({ calls, showForm, setShowForm, onAdd, onDelete }) {
 function AddModal({ onClose, onSave, existing }) {
   const [f, setF] = useState({
     name: '', phone: '', age: '', region: '', position: '새벽수거',
+    target_company: '오늘의집',
     career_type: '신입', career_years: '', career_note: '',
     has_truck: '없음', truck_type: '', stage: '서류접수', status: '', note: '',
   })
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const [customPos, setCustomPos] = useState(false)
+  const [customCo, setCustomCo] = useState(false)
 
   const phoneDigits = f.phone.replace(/[^0-9]/g, '')
   const dup = existing.find(a => (a.phone || '').replace(/[^0-9]/g, '') === phoneDigits && phoneDigits.length >= 10)
@@ -735,6 +827,19 @@ function AddModal({ onClose, onSave, existing }) {
             </select>
           ) : (
             <input value={f.position} autoFocus onChange={e => set('position', e.target.value)} placeholder="직접 입력" />
+          )}
+        </div>
+        <div className="modal-row"><label>구직회사</label>
+          {!customCo ? (
+            <select value={f.target_company} onChange={e => {
+              if (e.target.value === '__direct__') { setCustomCo(true); set('target_company', '') }
+              else set('target_company', e.target.value)
+            }}>
+              {COMPANIES.map(c => <option key={c}>{c}</option>)}
+              <option value="__direct__">+ 직접 입력</option>
+            </select>
+          ) : (
+            <input value={f.target_company} autoFocus onChange={e => set('target_company', e.target.value)} placeholder="회사명 직접 입력" />
           )}
         </div>
         <div className="modal-row"><label>경력 구분</label>
