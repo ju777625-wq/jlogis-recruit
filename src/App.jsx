@@ -1,247 +1,1144 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif; color: #2c2c2a; background: #f7f6f2; }
-button { font-family: inherit; }
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from './supabaseClient'
+import './App.css'
 
-.app { display: grid; grid-template-columns: var(--sidebar-w, 480px) 1fr; height: 100vh; background: #fff; position: relative; }
-
-/* 좌우 폭 조절 막대 (PC 전용) */
-.resizer { position: absolute; top: 0; left: calc(var(--sidebar-w, 480px) - 3px); width: 7px; height: 100%; cursor: col-resize; z-index: 50; background: transparent; }
-.resizer::after { content: ''; position: absolute; left: 3px; top: 0; width: 1px; height: 100%; background: #e5e3dc; }
-.resizer:hover::after, .resizer:active::after { width: 3px; left: 2px; background: #1D9E75; }
-
-.sidebar { border-right: 1px solid #e5e3dc; display: flex; flex-direction: column; background: #faf9f5; min-height: 0; }
-.sidebar-header { padding: 16px; border-bottom: 1px solid #e5e3dc; }
-.sidebar-header h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
-.search-box input { width: 100%; padding: 8px 12px; font-size: 14px; border: 1px solid #e5e3dc; border-radius: 8px; outline: none; }
-.search-box input:focus { border-color: #1D9E75; }
-.add-btn { width: 100%; margin-top: 8px; padding: 9px; font-size: 14px; font-weight: 500; background: #1D9E75; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
-.add-btn:hover { background: #0F6E56; }
-
-.stage-filter { padding: 10px 16px; border-bottom: 1px solid #e5e3dc; }
-.filter-row { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 4px; white-space: nowrap; -webkit-overflow-scrolling: touch; }
-.filter-row::-webkit-scrollbar { height: 5px; }
-.filter-row::-webkit-scrollbar-thumb { background: #d8d5cc; border-radius: 3px; }
-.stage-filter p { font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-.stage-pill { display: inline-flex; flex: 0 0 auto; padding: 4px 11px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid #e5e3dc; background: #fff; }
-.stage-pill.active { border-color: #888; font-weight: 500; }
-
-.applicant-list { flex: 1; overflow-y: auto; padding: 8px; }
-.applicant-card { padding: 11px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 5px; border: 1px solid #eceae3; }
-.applicant-card.row { display: grid; grid-template-columns: 62px 70px 40px 1fr 1fr 24px; align-items: center; gap: 7px; padding: 9px 12px; }
-.applicant-card.row .c-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.applicant-card.row .c-status { font-size: 11px; padding: 2px 6px; border-radius: 8px; white-space: nowrap; text-align: center; overflow: hidden; text-overflow: ellipsis; }
-.applicant-card.row .c-age { font-size: 12px; color: #777; white-space: nowrap; }
-.applicant-card.row .c-region { font-size: 12px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.applicant-card.row .c-pos { font-size: 12px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.applicant-card.row .c-truck { font-size: 13px; text-align: center; }
-.applicant-card:hover, .applicant-card.selected { background: #fff; border-color: #1D9E75; }
-.card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.applicant-card .name { font-size: 15px; font-weight: 600; }
-.applicant-card .meta { font-size: 12px; color: #777; margin-top: 4px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.applicant-card .meta.sub { margin-top: 3px; }
-.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.tag { padding: 1px 8px; border-radius: 8px; font-size: 11px; }
-.phone-link { color: #185FA5; text-decoration: none; font-weight: 500; }
-.phone-link:hover { text-decoration: underline; }
-.hint { padding: 20px; text-align: center; font-size: 13px; color: #999; }
-.hint.err { color: #A32D2D; }
-
-.main { display: flex; flex-direction: column; min-height: 0; }
-.empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #aaa; }
-.main-header { padding: 20px 24px 16px; border-bottom: 1px solid #e5e3dc; }
-.back-btn { display: none; background: none; border: none; font-size: 15px; color: #1D9E75; cursor: pointer; padding: 0 0 12px; font-weight: 500; }
-.row-between { display: flex; justify-content: space-between; align-items: flex-start; }
-.detail-name { font-size: 22px; font-weight: 600; }
-.detail-meta { font-size: 13px; color: #777; margin-top: 4px; }
-.detail-meta span { margin-right: 16px; }
-.del-btn { font-size: 12px; color: #999; background: none; border: 1px solid #e5e3dc; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-.del-btn:hover { color: #A32D2D; border-color: #A32D2D; }
-
-.stage-bar { display: flex; margin-top: 14px; border: 1px solid #e5e3dc; border-radius: 8px; overflow: hidden; }
-.stage-step { flex: 1; padding: 9px 4px; text-align: center; font-size: 12px; cursor: pointer; border-right: 1px solid #e5e3dc; }
-.stage-step:last-child { border-right: none; }
-.stage-step.done { background: #E1F5EE; color: #0F6E56; }
-.stage-step.current { background: #1D9E75; color: #fff; font-weight: 600; }
-.stage-step.future { color: #aaa; }
-
-.tabs { display: flex; padding: 0 24px; border-bottom: 1px solid #e5e3dc; }
-.tab { padding: 12px 16px; font-size: 14px; cursor: pointer; color: #777; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-.tab.active { color: #2c2c2a; border-bottom-color: #1D9E75; font-weight: 600; }
-.tab-content { padding: 20px 24px; flex: 1; overflow-y: auto; }
-
-.section-title { font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
-.info-item label { font-size: 11px; color: #999; display: block; margin-bottom: 4px; }
-.info-item.full { margin-bottom: 12px; }
-.info-item input, .info-item select, .info-item textarea { width: 100%; font-size: 14px; background: #faf9f5; border: 1px solid #e5e3dc; border-radius: 8px; padding: 8px 10px; outline: none; }
-.info-item input:focus, .info-item textarea:focus, .info-item select:focus { border-color: #1D9E75; background: #fff; }
-.info-item textarea { resize: vertical; min-height: 70px; }
-
-.call-log { margin-bottom: 16px; }
-.call-entry { padding: 12px 14px; border: 1px solid #e5e3dc; border-radius: 8px; margin-bottom: 8px; }
-.call-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.call-date { font-size: 13px; font-weight: 500; }
-.row-gap { display: flex; gap: 6px; align-items: center; }
-.call-result { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-.call-memo { font-size: 14px; color: #555; }
-.next-action { font-size: 12px; color: #185FA5; margin-top: 5px; }
-.x-btn { font-size: 12px; background: none; border: none; cursor: pointer; color: #aaa; }
-
-.call-form { background: #faf9f5; border: 1px solid #e5e3dc; border-radius: 8px; padding: 14px; margin-top: 8px; }
-.call-form .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.call-form input, .call-form select, .call-form textarea { font-size: 14px; background: #fff; border: 1px solid #e5e3dc; border-radius: 8px; padding: 8px 10px; outline: none; }
-.call-form .form-row input, .call-form .form-row select { flex: 1; }
-.call-form > textarea { width: 100%; min-height: 60px; resize: vertical; margin-bottom: 8px; }
-.call-form > input { width: 100%; margin-bottom: 8px; }
-.form-btns { display: flex; gap: 8px; justify-content: flex-end; }
-.save-btn { padding: 8px 18px; font-size: 14px; font-weight: 500; background: #1D9E75; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
-.cancel-btn { padding: 8px 18px; font-size: 14px; background: #fff; color: #777; border: 1px solid #ccc; border-radius: 8px; cursor: pointer; }
-
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
-.modal { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
-.modal h3 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
-.modal-row { margin-bottom: 12px; }
-.modal-row label { font-size: 12px; color: #777; display: block; margin-bottom: 4px; }
-.modal-row input, .modal-row select { width: 100%; font-size: 14px; padding: 9px 11px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
-.modal-row input:focus, .modal-row select:focus { border-color: #1D9E75; }
-.modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; position: sticky; bottom: 0; background: #fff; padding-top: 10px; }
-
-@media (max-width: 720px) {
-  .app { grid-template-columns: 1fr; height: 100vh; position: relative; }
-  .resizer { display: none; }
-  .sidebar { border-right: none; height: 100vh; }
-  .app.detail-open .sidebar { display: none; }
-  .app:not(.detail-open) .main { display: none; }
-  .main { height: 100vh; }
-  .back-btn { display: block; }
-  .info-grid { grid-template-columns: 1fr; }
-  .applicant-card.row { grid-template-columns: 56px 64px 36px 1fr 22px; gap: 6px; }
-  .applicant-card.row .c-region { display: none; }
-  .stage-step { font-size: 10px; padding: 7px 2px; }
-  .detail-meta span { display: block; margin: 2px 0; }
-  .modal { max-height: 85vh; padding: 20px; }
+const STAGES = ['서류접수', '전화상담', '면접', '동승심사', '채용완료']
+const STAGE_COLORS = {
+  '서류접수': ['#E6F1FB', '#185FA5'],
+  '전화상담': ['#FAEEDA', '#BA7517'],
+  '면접': ['#EEEDFE', '#534AB7'],
+  '동승심사': ['#E1F5EE', '#0F6E56'],
+  '채용완료': ['#EAF3DE', '#3B6D11'],
+  '불합격': ['#FCEBEB', '#A32D2D'],
+}
+const POSITIONS = ['새벽수거', '세탁물수거', '가구배송/조립', '기타']
+const CAREER_TYPES = ['신입', '경력']
+const TRUCK_OPTIONS = ['없음', '있음']
+const STATUS_OPTIONS = ['', '재통화', '지원취소', '면접연기']
+const STATUS_COLORS = {
+  '재통화': ['#FAEEDA', '#BA7517'],
+  '지원취소': ['#FCEBEB', '#A32D2D'],
+  '면접연기': ['#F1EFE8', '#5F5E5A'],
+}
+const DEFAULT_STATUS_COLOR = ['#E6F1FB', '#185FA5'] // 직접입력한 상태 색
+const statusColor = (s) => STATUS_COLORS[s] || DEFAULT_STATUS_COLOR
+const COMPANIES = ['오늘의집', '한샘', '주원', 'TK']
+const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
+const CALL_COLORS = {
+  '연결됨': ['#E1F5EE', '#0F6E56'],
+  '부재중': ['#FAEEDA', '#BA7517'],
+  '콜백 예정': ['#EEEDFE', '#534AB7'],
+  '거절': ['#FCEBEB', '#A32D2D'],
+  '기타': ['#F1EFE8', '#5F5E5A'],
 }
 
-.cal-btn { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 16px; padding: 9px 16px; font-size: 14px; font-weight: 500; background: #E6F1FB; color: #185FA5; border: 1px solid #b9d6f2; border-radius: 8px; text-decoration: none; }
-.cal-btn:hover { background: #d4e6f9; }
-
-.stage-step .stage-date { font-size: 9px; opacity: 0.85; margin-top: 2px; }
-
-/* 화면 전환 버튼 */
-.screen-toggle { display: flex; gap: 6px; margin-top: 8px; }
-.screen-toggle button { flex: 1; padding: 8px; font-size: 13px; background: #fff; color: #555; border: 1px solid #e5e3dc; border-radius: 8px; cursor: pointer; }
-.screen-toggle button.on { background: #1D9E75; color: #fff; border-color: #1D9E75; font-weight: 600; }
-
-/* 달력 */
-.cal-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; height: 100%; padding: 18px 22px; overflow-y: auto; }
-.cal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.cal-head button { width: 34px; height: 34px; font-size: 18px; background: #faf9f5; border: 1px solid #e5e3dc; border-radius: 8px; cursor: pointer; }
-.cal-head .cal-title { font-size: 18px; font-weight: 600; margin: 0 6px; }
-.cal-head .cal-today { width: auto; padding: 0 12px; font-size: 13px; font-weight: 500; }
-.cal-legend { display: flex; gap: 16px; font-size: 12px; color: #666; margin-bottom: 10px; }
-.cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.lg { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-.lg-iv { background: #EEEDFE; border: 1px solid #534AB7; }
-.lg-cs { background: #FAEEDA; border: 1px solid #BA7517; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
-.cal-dow { margin-bottom: 4px; }
-.cal-dowcell { text-align: center; font-size: 12px; font-weight: 600; color: #888; padding: 4px 0; }
-.cal-dowcell.sun { color: #c0392b; }
-.cal-dowcell.sat { color: #2471a3; }
-.cal-body { gap: 1px; background: #ececec; border: 1px solid #ececec; border-radius: 8px; overflow: visible; }
-.cal-cell { background: #fff; min-height: 96px; padding: 4px 5px; display: flex; flex-direction: column; gap: 3px; }
-.cal-cell.empty { background: #faf9f7; }
-.cal-cell.today { background: #f0faf6; }
-.cal-daynum { font-size: 12px; color: #444; font-weight: 500; }
-.cal-daynum.sun { color: #c0392b; }
-.cal-daynum.sat { color: #2471a3; }
-.cal-cell.today .cal-daynum { color: #1D9E75; font-weight: 700; }
-.cal-ev { font-size: 11px; padding: 3px 6px; border-radius: 5px; cursor: pointer; white-space: normal; word-break: keep-all; line-height: 1.3; }
-.cal-ev b { font-weight: 700; }
-.cal-ev.iv { background: #EEEDFE; color: #534AB7; }
-.cal-ev.cs { background: #FAEEDA; color: #BA7517; }
-.cal-ev:hover { filter: brightness(0.95); }
-
-@media (max-width: 720px) {
-  .cal-wrap { padding: 12px; }
-  .cal-cell { min-height: 60px; padding: 3px; }
-  .cal-ev { font-size: 9px; padding: 1px 3px; }
-  .cal-daynum { font-size: 11px; }
+// 전화번호 자동 하이픈
+function formatPhone(v) {
+  const n = (v || '').replace(/[^0-9]/g, '').slice(0, 11)
+  if (n.length < 4) return n
+  if (n.length < 7) return n.slice(0, 3) + '-' + n.slice(3)
+  if (n.length < 11) return n.slice(0, 3) + '-' + n.slice(3, 6) + '-' + n.slice(6)
+  return n.slice(0, 3) + '-' + n.slice(3, 7) + '-' + n.slice(7)
 }
 
-/* ===== 컴팩트 헤더 툴바 ===== */
-.topbar { display: flex; align-items: center; justify-content: flex-start; gap: 12px; flex-wrap: wrap; }
-.topbar h2 { font-size: 15px; font-weight: 600; margin: 0; }
-.topbar-btns { display: flex; gap: 6px; }
-.mini-btn { width: 34px; height: 34px; font-size: 16px; line-height: 1; background: #fff; color: #444; border: 1px solid #e5e3dc; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-.mini-btn:hover { border-color: #1D9E75; }
-.mini-btn.on { background: #1D9E75; color: #fff; border-color: #1D9E75; }
-.sidebar-header .search-box { margin-top: 10px; }
+export default function App() {
+  const [applicants, setApplicants] = useState([])
+  const [calls, setCalls] = useState([])
+  const [myEvents, setMyEvents] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
+  const [view, setView] = useState('전체')
+  const [screen, setScreen] = useState('today') // 'today' | 'list' | 'calendar'
+  const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('info')
+  const [showModal, setShowModal] = useState(false)
+  const [showCallForm, setShowCallForm] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [sidebarW, setSidebarW] = useState(() => {
+    const saved = Number(localStorage.getItem('jlogis_sidebar_w'))
+    return saved >= 320 && saved <= 900 ? saved : 480
+  })
 
-/* 전체 필터칩 */
-.stage-pill.all { background: #2c2c2a; color: #fff; border-color: #2c2c2a; }
-.stage-pill.all.active { box-shadow: 0 0 0 2px #c9c7c0; }
-.stage-pill.active { font-weight: 700; }
+  // 좌우 폭 끌어서 조절 (PC 전용)
+  function startResize(e) {
+    e.preventDefault()
+    let latest = sidebarW
+    const onMove = (ev) => {
+      const maxW = Math.min(760, window.innerWidth - 360)
+      const w = Math.min(Math.max(ev.clientX, 320), maxW)
+      latest = w
+      setSidebarW(w)
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+      try { localStorage.setItem('jlogis_sidebar_w', String(latest)) } catch (err) { /* 무시 */ }
+    }
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 
-/* ===== 2줄 명단 카드 ===== */
-.applicant-list { padding: 8px 10px; }
-.ap-card { padding: 11px 13px; border-radius: 10px; cursor: pointer; margin-bottom: 7px; border: 1px solid #eceae3; background: #fff; }
-.ap-card:hover, .ap-card.selected { border-color: #1D9E75; box-shadow: 0 1px 4px rgba(29,158,117,.10); }
-.ap-top { display: flex; align-items: center; gap: 7px; }
-.ap-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ap-truck { font-size: 13px; }
-.ap-badge { margin-left: auto; flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 9px; white-space: nowrap; }
-.ap-meta { font-size: 12.5px; color: #6b6b66; margin-top: 5px; line-height: 1.35; }
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    const { data: ap, error: e1 } = await supabase
+      .from('applicants').select('*').order('created_at', { ascending: false })
+    const { data: cl, error: e2 } = await supabase
+      .from('calls').select('*').order('call_date', { ascending: false })
+    if (e1 || e2) {
+      setError((e1 || e2).message)
+    } else {
+      setApplicants(ap || [])
+      setCalls(cl || [])
+    }
+    // 내 일정: 테이블이 아직 없으면 조용히 건너뜀
+    const { data: me, error: e3 } = await supabase
+      .from('my_events').select('*').order('event_date', { ascending: true })
+    if (!e3) setMyEvents(me || [])
+    setLoading(false)
+  }, [])
 
-/* ===== 달력 + 비서 패널 레이아웃 ===== */
-.cal-layout { display: flex; height: 100%; min-height: 0; }
-.agenda { width: 250px; flex: 0 0 250px; border-right: 1px solid #e5e3dc; background: #faf9f5; padding: 16px 14px; overflow-y: auto; }
-.agenda .back-btn { display: none; }
-.ag-head { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
-.ag-group { margin-bottom: 16px; }
-.ag-grouptitle { font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
-.ag-item { background: #fff; border: 1px solid #eceae3; border-left: 4px solid #ccc; border-radius: 8px; padding: 9px 11px; margin-bottom: 7px; cursor: pointer; }
-.ag-item:hover { box-shadow: 0 1px 5px rgba(0,0,0,.06); }
-.ag-line1 { display: flex; align-items: center; gap: 6px; }
-.ag-tag { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 8px; white-space: nowrap; }
-.ag-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ag-type { margin-left: auto; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 7px; white-space: nowrap; }
-.ag-type.iv { background: #EEEDFE; color: #534AB7; }
-.ag-type.cs { background: #FAEEDA; color: #BA7517; }
-.ag-line2 { font-size: 11.5px; color: #777; margin-top: 4px; }
+  useEffect(() => { loadData() }, [loadData])
 
-/* ===== 모바일: 명단 중앙, 컨트롤 최소화 ===== */
-@media (max-width: 720px) {
-  .topbar h2 { font-size: 15px; }
-  .applicant-list { padding: 10px 14px; max-width: 560px; margin: 0 auto; width: 100%; }
-  .ap-card { padding: 13px 15px; }
-  .ap-name { font-size: 16px; }
-  .ap-meta { font-size: 13px; }
-  .stage-filter { padding: 8px 12px; }
+  useEffect(() => {
+    const ch = supabase
+      .channel('realtime-recruit')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'applicants' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'my_events' }, loadData)
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [loadData])
 
-  /* 달력 화면: 비서 패널을 위로, 달력을 아래로 쌓기 */
-  .cal-layout { flex-direction: column; height: 100vh; overflow-y: auto; }
-  .agenda { width: 100%; flex: none; border-right: none; border-bottom: 1px solid #e5e3dc; max-height: none; }
-  .agenda .back-btn { display: block; }
-  .cal-wrap { height: auto; overflow: visible; padding: 14px; }
-  .cal-cell { min-height: 70px; }
-  .cal-ev { font-size: 10px; }
+  const selected = applicants.find(a => a.id === selectedId)
+  const selectedCalls = calls.filter(c => c.applicant_id === selectedId)
+
+  function matchView(a) {
+    if (view === '전체') return true
+    if (view.startsWith('s:')) return a.status === view.slice(2)
+    if (view.startsWith('stage:')) return a.stage === view.slice(6)
+    return true
+  }
+
+  const filtered = applicants.filter(a => {
+    const mq = !search || a.name.includes(search) || (a.phone || '').includes(search)
+    return mq && matchView(a)
+  })
+
+  // 상태 필터칩: 기본 상태 + 데이터에 실제로 쓰인 직접입력 상태까지
+  const statusChips = (() => {
+    const base = STATUS_OPTIONS.filter(s => s)
+    const used = [...new Set(applicants.map(a => a.status).filter(Boolean))]
+    const extra = used.filter(s => !base.includes(s))
+    return [...base, ...extra]
+  })()
+
+  function viewCount(key) {
+    return applicants.filter(a => {
+      if (key === '전체') return true
+      if (key.startsWith('s:')) return a.status === key.slice(2)
+      if (key.startsWith('stage:')) return a.stage === key.slice(6)
+      return false
+    }).length
+  }
+
+  async function addApplicant(form) {
+    // 중복 체크 (연락처)
+    const phoneDigits = (form.phone || '').replace(/[^0-9]/g, '')
+    const dup = applicants.find(a => (a.phone || '').replace(/[^0-9]/g, '') === phoneDigits && phoneDigits)
+    if (dup) {
+      if (!confirm(`이미 등록된 연락처입니다.\n(${dup.name} / ${dup.phone})\n그래도 등록할까요?`)) return
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    const payload = { ...form, stage_dates: { [form.stage || '서류접수']: today } }
+    const { data, error } = await supabase.from('applicants').insert([payload]).select()
+    if (error) { alert('등록 실패: ' + error.message); return }
+    await loadData()
+    if (data && data[0]) { setSelectedId(data[0].id); setActiveTab('info') }
+    setShowModal(false)
+  }
+
+  async function updateField(id, field, value) {
+    setApplicants(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a))
+    await supabase.from('applicants').update({ [field]: value }).eq('id', id)
+  }
+
+  // 단계 변경: 단계 + 그 단계로 넘긴 날짜 기록
+  async function changeStage(a, newStage) {
+    const today = new Date().toISOString().slice(0, 10)
+    const sd = { ...(a.stage_dates || {}) }
+    if (!sd[newStage]) sd[newStage] = today
+    setApplicants(prev => prev.map(x => x.id === a.id ? { ...x, stage: newStage, stage_dates: sd } : x))
+    await supabase.from('applicants').update({ stage: newStage, stage_dates: sd }).eq('id', a.id)
+  }
+
+  async function deleteApplicant(id) {
+    if (!confirm('이 지원자를 삭제하시겠습니까? 통화 이력도 함께 삭제됩니다.')) return
+    await supabase.from('applicants').delete().eq('id', id)
+    setSelectedId(null)
+    await loadData()
+  }
+
+  async function addCall(applicant_id, form) {
+    const { error } = await supabase.from('calls').insert([{ applicant_id, ...form }])
+    if (error) { alert('저장 실패: ' + error.message); return }
+    setShowCallForm(false)
+    await loadData()
+  }
+
+  async function deleteCall(id) {
+    await supabase.from('calls').delete().eq('id', id)
+    await loadData()
+  }
+
+  async function addMyEvent(form) {
+    const { error } = await supabase.from('my_events').insert([form])
+    if (error) { alert('일정 저장 실패: ' + error.message + '\n(Supabase에 my_events 표를 먼저 만들었는지 확인하세요)'); return }
+    await loadData()
+  }
+
+  async function deleteMyEvent(id) {
+    if (!confirm('이 일정을 삭제할까요?')) return
+    await supabase.from('my_events').delete().eq('id', id)
+    await loadData()
+  }
+
+  function goScreen(s) { setScreen(s); if (s !== 'list') setSelectedId(null) }
+  function pickApplicant(id) { setScreen('list'); setSelectedId(id); setActiveTab('info') }
+
+  const detailOpen = !!selected
+
+  return (
+    <div className={'app' + ((detailOpen || screen === 'calendar' || screen === 'today') ? ' detail-open' : '')}
+      style={{ '--sidebar-w': sidebarW + 'px' }}>
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <div className="topbar">
+            <h2>👥 구직자 관리</h2>
+            <div className="topbar-btns">
+              <button className={'mini-btn' + (searchOpen ? ' on' : '')} title="검색"
+                onClick={() => setSearchOpen(o => !o)}>🔍</button>
+              <button className="mini-btn" title="지원자 등록" onClick={() => setShowModal(true)}>＋</button>
+            </div>
+          </div>
+          <ScreenNav current={screen} onNav={goScreen} />
+          {searchOpen && (
+            <div className="search-box">
+              <input autoFocus placeholder="이름, 연락처 검색…" value={search}
+                onChange={e => setSearch(e.target.value)} />
+            </div>
+          )}
+        </div>
+
+        <div className="stage-filter">
+          <div className="filter-row">
+            <span className={'stage-pill all' + (view === '전체' ? ' active' : '')}
+              onClick={() => setView('전체')}>전체 {viewCount('전체')}</span>
+            {STAGES.map(s => {
+              const [bg, fg] = STAGE_COLORS[s]
+              const on = view === 'stage:' + s
+              return (
+                <span key={s} className={'stage-pill' + (on ? ' active' : '')}
+                  style={{ background: bg, color: fg, borderColor: on ? fg : bg }}
+                  onClick={() => setView('stage:' + s)}>
+                  {s} {viewCount('stage:' + s)}
+                </span>
+              )
+            })}
+          </div>
+          <div className="filter-row" style={{ marginTop: 6 }}>
+            {statusChips.map(s => {
+              const [bg, fg] = statusColor(s)
+              const on = view === 's:' + s
+              const cnt = viewCount('s:' + s)
+              return (
+                <span key={s} className={'stage-pill' + (on ? ' active' : '')}
+                  style={{ background: bg, color: fg, borderColor: on ? fg : bg }}
+                  onClick={() => setView('s:' + s)}>
+                  {s} {cnt}
+                </span>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="applicant-list">
+          {loading && <div className="hint">불러오는 중…</div>}
+          {error && <div className="hint err">연결 오류: {error}</div>}
+          {!loading && !filtered.length && <div className="hint">해당 지원자 없음</div>}
+          {filtered.map(a => {
+            const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
+            const meta = [a.age ? a.age + '세' : '', a.region, a.position, a.target_company]
+              .filter(Boolean).join(' · ')
+            return (
+              <div key={a.id} className={'ap-card' + (a.id === selectedId ? ' selected' : '')}
+                onClick={() => { setSelectedId(a.id); setActiveTab('info') }}>
+                <div className="ap-top">
+                  <span className="ap-name">{a.name}</span>
+                  {a.has_truck === '있음' && <span className="ap-truck">🚚</span>}
+                  {a.status ? (
+                    <span className="ap-badge" style={{ background: statusColor(a.status)[0], color: statusColor(a.status)[1] }}>{a.status}</span>
+                  ) : (
+                    <span className="ap-badge" style={{ background: bg, color: fg }}>{a.stage}</span>
+                  )}
+                </div>
+                <div className="ap-meta">{meta || '정보 없음'}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="resizer" onMouseDown={startResize} title="끌어서 좌우 폭 조절" />
+
+      <div className="main">
+        {screen === 'today' ? (
+          <TodayView applicants={applicants} myEvents={myEvents}
+            onAddMyEvent={addMyEvent} onDeleteMyEvent={deleteMyEvent}
+            onPick={pickApplicant} onNav={goScreen} />
+        ) : screen === 'calendar' ? (
+          <CalendarView applicants={applicants} myEvents={myEvents}
+            onAddMyEvent={addMyEvent} onDeleteMyEvent={deleteMyEvent}
+            onPick={pickApplicant} onBack={() => goScreen('today')} onNav={goScreen} />
+        ) : !selected ? (
+          <div className="empty">지원자를 선택하세요</div>
+        ) : (
+          <>
+            <div className="main-header">
+              <button className="back-btn" onClick={() => setSelectedId(null)}>← 목록</button>
+              <div className="row-between">
+                <div>
+                  <div className="detail-name">{selected.name}</div>
+                  <div className="detail-meta">
+                    <span><a className="phone-link" href={'tel:' + (selected.phone || '')}>📞 {selected.phone}</a></span>
+                    <span>📍 {selected.region || '-'}</span>
+                    <span>💼 {selected.position || '-'}</span>
+                    {selected.target_company && <span>🏢 {selected.target_company}</span>}
+                  </div>
+                  {selected.status && (
+                    <div style={{ marginTop: 6 }}>
+                      <span className="tag" style={{ background: statusColor(selected.status)[0], color: statusColor(selected.status)[1], fontWeight: 600, fontSize: 13, padding: '3px 10px' }}>{selected.status}</span>
+                    </div>
+                  )}
+                </div>
+                <button className="del-btn" onClick={() => deleteApplicant(selected.id)}>🗑 삭제</button>
+              </div>
+              <div className="stage-bar">
+                {STAGES.map((s, i) => {
+                  const idx = STAGES.indexOf(selected.stage)
+                  const cls = i < idx ? 'done' : i === idx ? 'current' : 'future'
+                  const d = (selected.stage_dates || {})[s]
+                  return (
+                    <div key={s} className={'stage-step ' + cls}
+                      onClick={() => changeStage(selected, s)}>
+                      <div>{s}</div>
+                      {d && <div className="stage-date">{d.slice(5)}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="tabs">
+              <div className={'tab' + (activeTab === 'info' ? ' active' : '')}
+                onClick={() => setActiveTab('info')}>기본 정보</div>
+              <div className={'tab' + (activeTab === 'stage' ? ' active' : '')}
+                onClick={() => setActiveTab('stage')}>현재 단계 할 일</div>
+              <div className={'tab' + (activeTab === 'calls' ? ' active' : '')}
+                onClick={() => setActiveTab('calls')}>통화 이력 ({selectedCalls.length})</div>
+            </div>
+
+            <div className="tab-content">
+              {activeTab === 'info' ? (
+                <InfoTab a={selected} onChange={updateField} />
+              ) : activeTab === 'stage' ? (
+                <StageTab a={selected} onChange={updateField} />
+              ) : (
+                <CallsTab
+                  calls={selectedCalls}
+                  showForm={showCallForm}
+                  setShowForm={setShowCallForm}
+                  onAdd={(form) => addCall(selected.id, form)}
+                  onDelete={deleteCall}
+                />
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {showModal && <AddModal onClose={() => setShowModal(false)} onSave={addApplicant} existing={applicants} />}
+    </div>
+  )
 }
 
-/* ===== 내 일정(달력) ===== */
-.cal-cell { cursor: pointer; }
-.cal-ev.me { background: #E1F5EE; color: #0F6E56; }
-.lg-me { background: #E1F5EE; border: 1px solid #0F6E56; }
-.cal-hint-inline { color: #aaa; font-size: 11px; margin-left: auto; }
+// 현재 단계에 맞는 할 일 입력칸만 보여주는 탭
+function StageTab({ a, onChange }) {
+  const stage = a.stage
+  return (
+    <>
+      <p className="section-title">현재 단계: {stage}</p>
+      {stage === '전화상담' && (
+        <>
+          <div className="info-grid">
+            <DateTimeField label="전화상담 일시" value={a.consult_at}
+              onSave={v => onChange(a.id, 'consult_at', v || null)} />
+            <Field label="상담 방법/장소" value={a.consult_place} placeholder="예: 유선"
+              onSave={v => onChange(a.id, 'consult_place', v)} />
+          </div>
+          {a.consult_at && (
+            <a className="cal-btn" href={makeCalUrl(a, 'consult')} target="_blank" rel="noopener noreferrer">
+              📅 구글 캘린더에 전화상담 일정 추가
+            </a>
+          )}
+        </>
+      )}
+      {stage === '면접' && (
+        <>
+          <div className="info-grid">
+            <DateTimeField label="면접 일시" value={a.interview_at}
+              onSave={v => onChange(a.id, 'interview_at', v || null)} />
+            <Field label="면접 장소" value={a.interview_place} placeholder="예: 본사 2층"
+              onSave={v => onChange(a.id, 'interview_place', v)} />
+          </div>
+          {a.interview_at && (
+            <a className="cal-btn" href={makeCalUrl(a, 'interview')} target="_blank" rel="noopener noreferrer">
+              📅 구글 캘린더에 면접 일정 추가
+            </a>
+          )}
+        </>
+      )}
+      {stage === '동승심사' && (
+        <div className="info-item full">
+          <label>동승심사 내용</label>
+          <textarea defaultValue={a.ride_review} placeholder="동승심사 결과, 특이사항 등"
+            key={'rr2' + a.id} onBlur={e => onChange(a.id, 'ride_review', e.target.value)} />
+        </div>
+      )}
+      {(stage === '서류접수' || stage === '채용완료' || stage === '불합격') && (
+        <div className="hint" style={{ textAlign: 'left', padding: '8px 0' }}>
+          이 단계에서는 별도 입력 항목이 없습니다. 상단 단계바를 눌러 단계를 옮기거나, '기본 정보' 탭에서 내용을 수정하세요.
+        </div>
+      )}
+      <div className="info-item full" style={{ marginTop: 14 }}>
+        <label>메모</label>
+        <textarea defaultValue={a.note} key={'note2' + a.id}
+          onBlur={e => onChange(a.id, 'note', e.target.value)} />
+      </div>
+    </>
+  )
+}
 
-/* ===== 내 일정표(비서 패널) 추가 스타일 ===== */
-.ag-grouptitle.today { color: #C0392B; }
-.ag-none { font-size: 12px; color: #b0aea8; padding: 2px 2px 6px; }
-.ag-type.me { background: #E1F5EE; color: #0F6E56; }
-.ag-del { margin-left: 4px; flex: 0 0 auto; background: none; border: none; color: #bbb; font-size: 12px; cursor: pointer; padding: 0 2px; }
-.ag-del:hover { color: #A32D2D; }
-.ag-memo { font-size: 11.5px; color: #8a8a85; margin-top: 3px; }
+function InfoTab({ a, onChange }) {
+  return (
+    <>
+      <p className="section-title">구직자 상태</p>
+      <div className="info-item full">
+        <StatusField value={a.status} onSave={v => onChange(a.id, 'status', v)} />
+      </div>
 
-@media (max-width: 720px) {
-  .cal-hint-inline { display: none; }
+      <p className="section-title" style={{ marginTop: 18 }}>기본 정보</p>
+      <div className="info-grid">
+        <Field label="이름" value={a.name} onSave={v => onChange(a.id, 'name', v)} />
+        <PhoneField label="연락처" value={a.phone} onSave={v => onChange(a.id, 'phone', v)} />
+        <Field label="나이" value={a.age} type="number" placeholder="예: 45"
+          onSave={v => onChange(a.id, 'age', v ? Number(v) : null)} />
+        <Field label="주거지" value={a.region} placeholder="예: 서울 강서"
+          onSave={v => onChange(a.id, 'region', v)} />
+        <ComboField label="지원 직종" value={a.position} options={POSITIONS}
+          onSave={v => onChange(a.id, 'position', v)} />
+        <ComboField label="구직회사" value={a.target_company} options={COMPANIES}
+          onSave={v => onChange(a.id, 'target_company', v)} />
+        <SelectField label="경력 구분" value={a.career_type || '신입'} options={CAREER_TYPES}
+          onSave={v => onChange(a.id, 'career_type', v)} />
+        <Field label="경력 연수(년)" value={a.career_years} type="number" placeholder="예: 3"
+          onSave={v => onChange(a.id, 'career_years', v ? Number(v) : 0)} />
+        <SelectField label="트럭 소유" value={a.has_truck || '없음'} options={TRUCK_OPTIONS}
+          onSave={v => onChange(a.id, 'has_truck', v)} />
+        <Field label="차종" value={a.truck_type} placeholder="예: 1톤 탑차"
+          onSave={v => onChange(a.id, 'truck_type', v)} />
+      </div>
+
+      <p className="section-title" style={{ marginTop: 18 }}>기타</p>
+      <div className="info-item full">
+        <label>기타 주요 경력</label>
+        <textarea defaultValue={a.career_note} placeholder="이전 직장, 보유 자격증 등"
+          key={'cn' + a.id} onBlur={e => onChange(a.id, 'career_note', e.target.value)} />
+      </div>
+      <div className="info-item full">
+        <label>메모</label>
+        <textarea defaultValue={a.note} key={'nt' + a.id}
+          onBlur={e => onChange(a.id, 'note', e.target.value)} />
+      </div>
+    </>
+  )
+}
+
+function Field({ label, value, placeholder, type, onSave }) {
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      <input type={type || 'text'} defaultValue={value ?? ''} placeholder={placeholder}
+        key={String(value)} onBlur={e => onSave(e.target.value)} />
+    </div>
+  )
+}
+
+// 전화번호 전용: 입력하는 동안 자동으로 하이픈
+function PhoneField({ label, value, onSave }) {
+  const [v, setV] = useState(value || '')
+  useEffect(() => { setV(value || '') }, [value])
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      <input type="tel" value={v}
+        onChange={e => setV(formatPhone(e.target.value))}
+        onBlur={() => onSave(v)} placeholder="010-0000-0000" />
+    </div>
+  )
+}
+
+function SelectField({ label, value, options, onSave }) {
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      <select value={value} onChange={e => onSave(e.target.value)}>
+        {options.map(o => <option key={o}>{o}</option>)}
+      </select>
+    </div>
+  )
+}
+
+// 구직자 상태: 기본 선택 + 직접입력
+function StatusField({ value, onSave }) {
+  const known = STATUS_OPTIONS.includes(value || '')
+  const [custom, setCustom] = useState(!known && !!value)
+  if (custom) {
+    return (
+      <input defaultValue={value || ''} placeholder="상태 직접 입력 (예: 결정통보 대기)" autoFocus
+        onBlur={e => { onSave(e.target.value); if (!e.target.value) setCustom(false) }} />
+    )
+  }
+  return (
+    <select value={known ? (value || '') : ''} onChange={e => {
+      if (e.target.value === '__direct__') { setCustom(true) }
+      else onSave(e.target.value)
+    }}>
+      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}
+      <option value="__direct__">+ 직접 입력</option>
+    </select>
+  )
+}
+
+function ComboField({ label, value, options, onSave }) {
+  const known = options.includes(value)
+  const [custom, setCustom] = useState(!known && !!value)
+  return (
+    <div className="info-item">
+      <label>{label}</label>
+      {!custom ? (
+        <select value={known ? value : ''} onChange={e => {
+          if (e.target.value === '__direct__') { setCustom(true) }
+          else onSave(e.target.value)
+        }}>
+          {options.map(o => <option key={o}>{o}</option>)}
+          <option value="__direct__">+ 직접 입력</option>
+        </select>
+      ) : (
+        <input defaultValue={known ? '' : (value || '')} placeholder="직접 입력"
+          autoFocus onBlur={e => { onSave(e.target.value); if (!e.target.value) setCustom(false) }} />
+      )}
+    </div>
+  )
+}
+
+// 날짜 + 30분 단위 시간 선택
+function DateTimeField({ label, value, onSave }) {
+  const d = value ? new Date(value) : null
+  const pad = n => String(n).padStart(2, '0')
+  const datePart = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : ''
+  const timePart = d ? `${pad(d.getHours())}:${pad(Math.floor(d.getMinutes() / 30) * 30)}` : ''
+
+  function emit(dateStr, timeStr) {
+    if (!dateStr || !timeStr) { onSave(''); return }
+    const iso = new Date(`${dateStr}T${timeStr}`).toISOString()
+    onSave(iso)
+  }
+
+  const TIMES = []
+  for (let h = 6; h <= 22; h++) {
+    TIMES.push(`${pad(h)}:00`)
+    TIMES.push(`${pad(h)}:30`)
+  }
+
+  return (
+    <>
+      <div className="info-item">
+        <label>{label} (날짜)</label>
+        <input type="date" defaultValue={datePart} key={'d' + datePart}
+          onChange={e => emit(e.target.value, timePart || '09:00')} />
+      </div>
+      <div className="info-item">
+        <label>{label} (시간)</label>
+        <select value={timePart} onChange={e => emit(datePart || new Date().toISOString().slice(0, 10), e.target.value)}>
+          <option value="">선택</option>
+          {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+    </>
+  )
+}
+
+// 화면 전환 네비 (오늘 / 명단 / 달력)
+function ScreenNav({ current, onNav, className = '' }) {
+  const items = [['today', '🏠 오늘'], ['list', '📋 명단'], ['calendar', '📅 달력']]
+  return (
+    <div className={'screen-nav ' + className}>
+      {items.map(([k, l]) => (
+        <button key={k} className={current === k ? 'on' : ''} onClick={() => onNav(k)}>{l}</button>
+      ))}
+    </div>
+  )
+}
+
+// "오늘" 브리핑 화면 — 비서처럼 오늘 일정 + 통화할 사람 + 놓친 일정
+function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, onPick, onNav }) {
+  const [addOpen, setAddOpen] = useState(false)
+  const now = new Date()
+  const pad = n => String(n).padStart(2, '0')
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const dow = ['일', '월', '화', '수', '목', '금', '토']
+  const isSameDay = (dt) => {
+    const d = new Date(dt)
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+  }
+
+  // 오늘 일정 모으기 (면접 / 전화상담 / 내 일정)
+  const todays = []
+  applicants.forEach(a => {
+    if (a.interview_at && isSameDay(a.interview_at))
+      todays.push({ kind: 'cand', id: a.id, sortAt: new Date(a.interview_at), time: hm(new Date(a.interview_at)), type: '면접', name: a.name, phone: a.phone, company: a.target_company, place: a.interview_place })
+    if (a.consult_at && isSameDay(a.consult_at))
+      todays.push({ kind: 'cand', id: a.id, sortAt: new Date(a.consult_at), time: hm(new Date(a.consult_at)), type: '전화상담', name: a.name, phone: a.phone, company: a.target_company, place: a.consult_place })
+  })
+  myEvents.forEach(ev => {
+    if (ev.event_date === todayStr)
+      todays.push({ kind: 'mine', id: ev.id, sortAt: new Date(`${ev.event_date}T${ev.event_time || '00:00'}`), time: ev.event_time || '', allday: !ev.event_time, type: '내일정', name: ev.title, place: ev.place, memo: ev.memo })
+  })
+  todays.sort((x, y) => x.sortAt - y.sortAt)
+
+  // 오늘 통화할 사람: 재통화 상태
+  const callbacks = applicants.filter(a => a.status === '재통화')
+
+  // 놓친 일정: 오늘 이전(지난 7일) 면접/전화
+  const overdue = []
+  applicants.forEach(a => {
+    if (a.interview_at) { const df = dayDiff(a.interview_at); if (df < 0 && df >= -7) overdue.push({ id: a.id, name: a.name, type: '면접', at: a.interview_at }) }
+    if (a.consult_at) { const df = dayDiff(a.consult_at); if (df < 0 && df >= -7) overdue.push({ id: a.id, name: a.name, type: '전화상담', at: a.consult_at }) }
+  })
+  overdue.sort((x, y) => new Date(y.at) - new Date(x.at))
+
+  const TYPE = { '면접': ['#EEEDFE', '#534AB7'], '전화상담': ['#FAEEDA', '#BA7517'], '내일정': ['#E1F5EE', '#0F6E56'] }
+  const cnt = {
+    iv: todays.filter(t => t.type === '면접').length,
+    cs: todays.filter(t => t.type === '전화상담').length,
+    me: todays.filter(t => t.type === '내일정').length,
+  }
+  const evLabel = (at) => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()}(${dow[d.getDay()]}) ${hm(d)}` }
+
+  return (
+    <div className="today-wrap">
+      <ScreenNav current="today" onNav={onNav} className="main-nav" />
+      <div className="today-head">
+        <div className="today-date">오늘 · {now.getMonth() + 1}월 {now.getDate()}일 ({dow[now.getDay()]})</div>
+        <div className="today-summary">
+          <span>면접 {cnt.iv}</span>
+          <span>전화상담 {cnt.cs}</span>
+          <span>내 일정 {cnt.me}</span>
+          <span className="cb">재통화 {callbacks.length}</span>
+        </div>
+      </div>
+
+      <div className="tv-section">
+        <div className="tv-section-title">오늘 일정</div>
+        {todays.length ? todays.map((it, i) => {
+          const [bg, fg] = TYPE[it.type] || ['#eee', '#555']
+          return (
+            <div key={i} className="tv-card" onClick={() => it.kind === 'cand' && onPick(it.id)}
+              style={{ cursor: it.kind === 'cand' ? 'pointer' : 'default' }}>
+              <div className="tv-time">{it.allday ? '종일' : it.time}</div>
+              <div className="tv-body">
+                <div className="tv-row1">
+                  <span className="tv-type" style={{ background: bg, color: fg }}>{it.type}</span>
+                  <span className="tv-name">{it.name}</span>
+                  {it.kind === 'mine' && <button className="tv-del" onClick={(e) => { e.stopPropagation(); onDeleteMyEvent(it.id) }}>✕</button>}
+                </div>
+                <div className="tv-meta">
+                  {[it.company, it.place ? '📍' + it.place : '', it.memo].filter(Boolean).join(' · ')}
+                </div>
+                {it.kind === 'cand' && it.phone && (
+                  <a className="tv-call" href={'tel:' + it.phone} onClick={e => e.stopPropagation()}>📞 {it.phone}</a>
+                )}
+              </div>
+            </div>
+          )
+        }) : <div className="tv-empty">오늘 예정된 일정이 없습니다.</div>}
+        <button className="tv-add" onClick={() => setAddOpen(true)}>＋ 오늘 일정 추가</button>
+      </div>
+
+      <div className="tv-section">
+        <div className="tv-section-title">오늘 통화할 사람 <span className="tv-count">{callbacks.length}</span></div>
+        {callbacks.length ? callbacks.map(a => (
+          <div key={a.id} className="tv-card cb" onClick={() => onPick(a.id)} style={{ cursor: 'pointer' }}>
+            <div className="tv-body">
+              <div className="tv-row1">
+                <span className="tv-type" style={{ background: '#FAEEDA', color: '#BA7517' }}>재통화</span>
+                <span className="tv-name">{a.name}</span>
+              </div>
+              <div className="tv-meta">{[a.target_company, a.position, a.region].filter(Boolean).join(' · ')}</div>
+              {a.phone && <a className="tv-call" href={'tel:' + a.phone} onClick={e => e.stopPropagation()}>📞 {a.phone}</a>}
+            </div>
+          </div>
+        )) : <div className="tv-empty">재통화로 표시한 사람이 없습니다.</div>}
+      </div>
+
+      {!!overdue.length && (
+        <details className="tv-section tv-overdue">
+          <summary>놓친 일정 {overdue.length}건 보기</summary>
+          {overdue.map((it, i) => (
+            <div key={i} className="tv-card mini" onClick={() => onPick(it.id)} style={{ cursor: 'pointer' }}>
+              <div className="tv-body">
+                <div className="tv-row1"><span className="tv-name">{it.name}</span><span className="tv-mini-type">{it.type}</span></div>
+                <div className="tv-meta">{evLabel(it.at)}</div>
+              </div>
+            </div>
+          ))}
+        </details>
+      )}
+
+      {addOpen && <MyEventModal date={todayStr} onClose={() => setAddOpen(false)}
+        onSave={(form) => { onAddMyEvent(form); setAddOpen(false) }} />}
+    </div>
+  )
+}
+
+function CalendarView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, onPick, onBack, onNav }) {
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  const [addDate, setAddDate] = useState(null) // 내 일정 추가용 날짜(YYYY-MM-DD)
+
+  // 날짜별 일정 모으기
+  const events = {}
+  function add(dateKey, ev) { (events[dateKey] = events[dateKey] || []).push(ev) }
+  applicants.forEach(a => {
+    if (a.interview_at) {
+      const d = new Date(a.interview_at)
+      add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`, { kind: 'cand', id: a.id, name: a.name, type: '면접', time: hm(d) })
+    }
+    if (a.consult_at) {
+      const d = new Date(a.consult_at)
+      add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`, { kind: 'cand', id: a.id, name: a.name, type: '전화상담', time: hm(d) })
+    }
+  })
+  myEvents.forEach(ev => {
+    if (!ev.event_date) return
+    const [y, mo, da] = ev.event_date.split('-').map(Number)
+    add(`${y}-${mo - 1}-${da}`, { kind: 'mine', id: ev.id, name: ev.title, type: '내일정', time: ev.event_time || '' })
+  })
+
+  const first = new Date(cursor.y, cursor.m, 1)
+  const startDow = first.getDay()
+  const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const today = new Date()
+  const isToday = d => d === today.getDate() && cursor.m === today.getMonth() && cursor.y === today.getFullYear()
+  const pad = n => String(n).padStart(2, '0')
+
+  function move(diff) {
+    let m = cursor.m + diff, y = cursor.y
+    if (m < 0) { m = 11; y-- }
+    if (m > 11) { m = 0; y++ }
+    setCursor({ y, m })
+  }
+
+  const DOW = ['일', '월', '화', '수', '목', '금', '토']
+
+  return (
+    <div className="cal-layout">
+      <AgendaPanel applicants={applicants} myEvents={myEvents}
+        onPick={onPick} onBack={onBack} onNav={onNav} onDeleteMyEvent={onDeleteMyEvent} />
+      <div className="cal-wrap">
+        <div className="cal-head">
+          <button onClick={() => move(-1)}>‹</button>
+          <span className="cal-title">{cursor.y}년 {cursor.m + 1}월</span>
+          <button onClick={() => move(1)}>›</button>
+          <button className="cal-today" onClick={() => { const d = new Date(); setCursor({ y: d.getFullYear(), m: d.getMonth() }) }}>오늘</button>
+        </div>
+        <div className="cal-legend">
+          <span><i className="lg lg-iv" /> 면접</span>
+          <span><i className="lg lg-cs" /> 전화상담</span>
+          <span><i className="lg lg-me" /> 내 일정</span>
+          <span className="cal-hint-inline">날짜 칸을 누르면 내 일정 추가</span>
+        </div>
+        <div className="cal-grid cal-dow">
+          {DOW.map((d, i) => <div key={d} className={'cal-dowcell' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>{d}</div>)}
+        </div>
+        <div className="cal-grid cal-body">
+          {cells.map((d, i) => {
+            const key = d ? `${cursor.y}-${cursor.m}-${d}` : 'e' + i
+            const evs = d ? (events[key] || []) : []
+            const dateStr = d ? `${cursor.y}-${pad(cursor.m + 1)}-${pad(d)}` : ''
+            return (
+              <div key={key} className={'cal-cell' + (d && isToday(d) ? ' today' : '') + (!d ? ' empty' : '')}
+                onClick={() => { if (d) setAddDate(dateStr) }}>
+                {d && <div className={'cal-daynum' + (i % 7 === 0 ? ' sun' : i % 7 === 6 ? ' sat' : '')}>{d}</div>}
+                {evs.map((ev, j) => (
+                  <div key={j}
+                    className={'cal-ev ' + (ev.type === '면접' ? 'iv' : ev.type === '전화상담' ? 'cs' : 'me')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (ev.kind === 'mine') onDeleteMyEvent(ev.id)
+                      else onPick(ev.id)
+                    }}
+                    title={ev.kind === 'mine' ? '내 일정 (눌러서 삭제)' : ev.type + ' ' + ev.name}>
+                    {ev.time && <b>{ev.time}</b>} {ev.name}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {addDate && (
+        <MyEventModal date={addDate} onClose={() => setAddDate(null)}
+          onSave={(form) => { onAddMyEvent(form); setAddDate(null) }} />
+      )}
+    </div>
+  )
+}
+
+// 날짜 차이(일): 오늘=0, 내일=1, 어제=-1
+function dayDiff(dateStr) {
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  const d = new Date(dateStr); d.setHours(0, 0, 0, 0)
+  return Math.round((d - now) / 86400000)
+}
+
+// 임박도에 따른 색 (오늘=빨강, 1~2일=주황, 3~7일=파랑, 지남=회색)
+function urgencyColor(diff) {
+  if (diff < 0) return ['#F1EFE8', '#8a8a85', '지남']
+  if (diff === 0) return ['#FCEBEB', '#C0392B', '오늘']
+  if (diff <= 2) return ['#FAEEDA', '#BA7517', 'D-' + diff]
+  return ['#E6F1FB', '#185FA5', 'D-' + diff]
+}
+
+// 달력 옆 "비서" 패널 — 오늘 / 이번 주 면접·전화예약·내 일정을 한눈에
+function AgendaPanel({ applicants, myEvents = [], onPick, onBack, onNav, onDeleteMyEvent }) {
+  const items = []
+  applicants.forEach(a => {
+    if (a.interview_at) items.push({ kind: 'cand', id: a.id, name: a.name, company: a.target_company, place: a.interview_place, type: '면접', at: a.interview_at })
+    if (a.consult_at) items.push({ kind: 'cand', id: a.id, name: a.name, company: a.target_company, place: a.consult_place, type: '전화상담', at: a.consult_at })
+  })
+  myEvents.forEach(ev => {
+    if (!ev.event_date) return
+    const at = new Date(`${ev.event_date}T${ev.event_time || '00:00'}`)
+    items.push({ kind: 'mine', id: ev.id, name: ev.title, place: ev.place, memo: ev.memo, type: '내일정', at: at.toISOString(), allday: !ev.event_time })
+  })
+
+  const enriched = items
+    .map(it => ({ ...it, diff: dayDiff(it.at) }))
+    .filter(it => it.diff >= -3 && it.diff <= 7)
+    .sort((x, y) => new Date(x.at) - new Date(y.at))
+
+  const todayList = enriched.filter(it => it.diff === 0)
+  const weekList = enriched.filter(it => it.diff >= 1)
+  const overdue = enriched.filter(it => it.diff < 0)
+
+  const dow = ['일', '월', '화', '수', '목', '금', '토']
+  function label(it) {
+    const d = new Date(it.at)
+    const date = `${d.getMonth() + 1}/${d.getDate()}(${dow[d.getDay()]})`
+    const time = it.allday ? '종일' : hm(d)
+    return `${date} ${time}`
+  }
+
+  function Row({ it }) {
+    const [bg, fg, tag] = urgencyColor(it.diff)
+    const typeCls = it.type === '면접' ? 'iv' : it.type === '전화상담' ? 'cs' : 'me'
+    return (
+      <div className="ag-item" style={{ borderLeftColor: fg }}
+        onClick={() => { if (it.kind === 'cand') onPick(it.id) }}>
+        <div className="ag-line1">
+          <span className="ag-tag" style={{ background: bg, color: fg }}>{tag}</span>
+          <span className="ag-name">{it.name}</span>
+          <span className={'ag-type ' + typeCls}>{it.type}</span>
+          {it.kind === 'mine' && (
+            <button className="ag-del" onClick={(e) => { e.stopPropagation(); onDeleteMyEvent(it.id) }}>✕</button>
+          )}
+        </div>
+        <div className="ag-line2">
+          {label(it)}
+          {it.company ? ' · ' + it.company : ''}
+          {it.place ? ' · 📍' + it.place : ''}
+        </div>
+        {it.memo && <div className="ag-memo">{it.memo}</div>}
+      </div>
+    )
+  }
+
+  const empty = !todayList.length && !weekList.length && !overdue.length
+
+  return (
+    <div className="agenda">
+      <ScreenNav current="calendar" onNav={onNav} className="main-nav" />
+      <div className="ag-head">🗒️ 내 일정표</div>
+      {empty && (
+        <div className="hint" style={{ padding: '14px 4px', textAlign: 'left' }}>
+          예정된 일정이 없습니다.<br />달력에서 날짜를 눌러 내 일정을 추가해 보세요.
+        </div>
+      )}
+      <div className="ag-group">
+        <div className="ag-grouptitle today">오늘 ({todayList.length})</div>
+        {todayList.length ? todayList.map((it, i) => <Row key={'t' + i} it={it} />)
+          : <div className="ag-none">오늘은 일정이 없습니다</div>}
+      </div>
+      {!!weekList.length && (
+        <div className="ag-group">
+          <div className="ag-grouptitle">이번 주 ({weekList.length})</div>
+          {weekList.map((it, i) => <Row key={'w' + i} it={it} />)}
+        </div>
+      )}
+      {!!overdue.length && (
+        <div className="ag-group">
+          <div className="ag-grouptitle">지난 일정 ({overdue.length})</div>
+          {overdue.map((it, i) => <Row key={'o' + i} it={it} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 내 일정 추가 모달
+function MyEventModal({ date, onClose, onSave }) {
+  const [f, setF] = useState({ event_date: date, event_time: '', title: '', place: '', memo: '' })
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const pad = n => String(n).padStart(2, '0')
+  const TIMES = []
+  for (let h = 6; h <= 22; h++) { TIMES.push(`${pad(h)}:00`); TIMES.push(`${pad(h)}:30`) }
+
+  function save() {
+    if (!f.title.trim()) { alert('일정 제목을 입력하세요'); return }
+    onSave({ ...f, event_time: f.event_time || null })
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h3>내 일정 추가</h3>
+        <div className="modal-row"><label>날짜</label>
+          <input type="date" value={f.event_date} onChange={e => set('event_date', e.target.value)} /></div>
+        <div className="modal-row"><label>시간 (선택 안 하면 종일)</label>
+          <select value={f.event_time} onChange={e => set('event_time', e.target.value)}>
+            <option value="">종일</option>
+            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select></div>
+        <div className="modal-row"><label>제목 *</label>
+          <input value={f.title} autoFocus onChange={e => set('title', e.target.value)} placeholder="예: 화물협회 미팅" /></div>
+        <div className="modal-row"><label>장소</label>
+          <input value={f.place} onChange={e => set('place', e.target.value)} placeholder="예: 판교 사무실" /></div>
+        <div className="modal-row"><label>메모</label>
+          <input value={f.memo} onChange={e => set('memo', e.target.value)} placeholder="간단 메모" /></div>
+        <div className="modal-btns">
+          <button className="cancel-btn" onClick={onClose}>취소</button>
+          <button className="save-btn" onClick={save}>추가</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function hm(d) {
+  const pad = n => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function makeCalUrl(a, kind) {
+  const at = kind === 'consult' ? a.consult_at : a.interview_at
+  const place = kind === 'consult' ? a.consult_place : a.interview_place
+  const label = kind === 'consult' ? '전화상담' : '면접'
+  const start = new Date(at)
+  const end = new Date(start.getTime() + 60 * 60 * 1000)
+  const fmt = dt => {
+    const pad = n => String(n).padStart(2, '0')
+    return dt.getUTCFullYear() + pad(dt.getUTCMonth() + 1) + pad(dt.getUTCDate()) +
+      'T' + pad(dt.getUTCHours()) + pad(dt.getUTCMinutes()) + '00Z'
+  }
+  const title = encodeURIComponent(`[${label}] ${a.name} (${a.position || ''})`)
+  const dates = `${fmt(start)}/${fmt(end)}`
+  const details = encodeURIComponent(
+    `지원자: ${a.name}\n연락처: ${a.phone || ''}\n지원직종: ${a.position || ''}\n구직회사: ${a.target_company || ''}\n나이: ${a.age || ''}\n트럭: ${a.has_truck || ''} ${a.truck_type || ''}`
+  )
+  const loc = encodeURIComponent(place || '')
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}&location=${loc}`
+}
+
+function CallsTab({ calls, showForm, setShowForm, onAdd, onDelete }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [result, setResult] = useState('연결됨')
+  const [memo, setMemo] = useState('')
+  const [next, setNext] = useState('')
+
+  function submit() {
+    onAdd({ call_date: date, result, memo, next_action: next })
+    setMemo(''); setNext('')
+  }
+
+  return (
+    <>
+      <p className="section-title">통화 이력</p>
+      <div className="call-log">
+        {!calls.length && <div className="hint">통화 이력이 없습니다</div>}
+        {calls.map(c => {
+          const [bg, fg] = CALL_COLORS[c.result] || ['#eee', '#555']
+          return (
+            <div key={c.id} className="call-entry">
+              <div className="call-header">
+                <span className="call-date">{c.call_date}</span>
+                <div className="row-gap">
+                  <span className="call-result" style={{ background: bg, color: fg }}>{c.result}</span>
+                  <button className="x-btn" onClick={() => onDelete(c.id)}>✕</button>
+                </div>
+              </div>
+              <div className="call-memo">{c.memo || '메모 없음'}</div>
+              {c.next_action && <div className="next-action">→ 다음 액션: {c.next_action}</div>}
+            </div>
+          )
+        })}
+      </div>
+
+      {!showForm ? (
+        <button className="add-btn" onClick={() => setShowForm(true)}>📞 통화 기록 추가</button>
+      ) : (
+        <div className="call-form">
+          <div className="form-row">
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            <select value={result} onChange={e => setResult(e.target.value)}>
+              {CALL_RESULTS.map(r => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <textarea placeholder="통화 내용 메모…" value={memo} onChange={e => setMemo(e.target.value)} />
+          <input placeholder="다음 액션 (선택)" value={next} onChange={e => setNext(e.target.value)} />
+          <div className="form-btns">
+            <button className="cancel-btn" onClick={() => setShowForm(false)}>취소</button>
+            <button className="save-btn" onClick={submit}>저장</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function AddModal({ onClose, onSave, existing }) {
+  const [f, setF] = useState({
+    name: '', phone: '', age: '', region: '', position: '새벽수거',
+    target_company: '오늘의집',
+    career_type: '신입', career_years: '', career_note: '',
+    has_truck: '없음', truck_type: '', stage: '서류접수', status: '', note: '',
+  })
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const [customPos, setCustomPos] = useState(false)
+  const [customCo, setCustomCo] = useState(false)
+  const [customStatus, setCustomStatus] = useState(false)
+
+  const phoneDigits = f.phone.replace(/[^0-9]/g, '')
+  const dup = existing.find(a => (a.phone || '').replace(/[^0-9]/g, '') === phoneDigits && phoneDigits.length >= 10)
+
+  function save() {
+    if (!f.name.trim() || !f.phone.trim()) { alert('이름과 연락처는 필수입니다'); return }
+    const payload = {
+      ...f,
+      age: f.age ? Number(f.age) : null,
+      career_years: f.career_years ? Number(f.career_years) : 0,
+    }
+    onSave(payload)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h3>지원자 등록</h3>
+        <div className="modal-row"><label>이름 *</label>
+          <input value={f.name} onChange={e => set('name', e.target.value)} placeholder="홍길동" /></div>
+        <div className="modal-row"><label>연락처 *</label>
+          <input type="tel" value={f.phone} onChange={e => set('phone', formatPhone(e.target.value))} placeholder="010-0000-0000" />
+          {dup && <div style={{ color: '#A32D2D', fontSize: 12, marginTop: 4 }}>⚠️ 이미 등록된 연락처입니다 ({dup.name})</div>}
+        </div>
+        <div className="modal-row"><label>나이</label>
+          <input type="number" value={f.age} onChange={e => set('age', e.target.value)} placeholder="예: 45" /></div>
+        <div className="modal-row"><label>주거지</label>
+          <input value={f.region} onChange={e => set('region', e.target.value)} placeholder="예: 서울 강서구" /></div>
+        <div className="modal-row"><label>지원 직종</label>
+          {!customPos ? (
+            <select value={f.position} onChange={e => {
+              if (e.target.value === '__direct__') { setCustomPos(true); set('position', '') }
+              else set('position', e.target.value)
+            }}>
+              {POSITIONS.map(p => <option key={p}>{p}</option>)}
+              <option value="__direct__">+ 직접 입력</option>
+            </select>
+          ) : (
+            <input value={f.position} autoFocus onChange={e => set('position', e.target.value)} placeholder="직접 입력" />
+          )}
+        </div>
+        <div className="modal-row"><label>구직회사</label>
+          {!customCo ? (
+            <select value={f.target_company} onChange={e => {
+              if (e.target.value === '__direct__') { setCustomCo(true); set('target_company', '') }
+              else set('target_company', e.target.value)
+            }}>
+              {COMPANIES.map(c => <option key={c}>{c}</option>)}
+              <option value="__direct__">+ 직접 입력</option>
+            </select>
+          ) : (
+            <input value={f.target_company} autoFocus onChange={e => set('target_company', e.target.value)} placeholder="회사명 직접 입력" />
+          )}
+        </div>
+        <div className="modal-row"><label>경력 구분</label>
+          <select value={f.career_type} onChange={e => set('career_type', e.target.value)}>
+            {CAREER_TYPES.map(c => <option key={c}>{c}</option>)}</select></div>
+        <div className="modal-row"><label>경력 연수(년)</label>
+          <input type="number" value={f.career_years} onChange={e => set('career_years', e.target.value)} placeholder="예: 3" /></div>
+        <div className="modal-row"><label>트럭 소유</label>
+          <select value={f.has_truck} onChange={e => set('has_truck', e.target.value)}>
+            {TRUCK_OPTIONS.map(t => <option key={t}>{t}</option>)}</select></div>
+        <div className="modal-row"><label>차종</label>
+          <input value={f.truck_type} onChange={e => set('truck_type', e.target.value)} placeholder="예: 1톤 탑차" /></div>
+        <div className="modal-row"><label>구직자 상태</label>
+          {!customStatus ? (
+            <select value={f.status} onChange={e => {
+              if (e.target.value === '__direct__') { setCustomStatus(true); set('status', '') }
+              else set('status', e.target.value)
+            }}>
+              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}
+              <option value="__direct__">+ 직접 입력</option>
+            </select>
+          ) : (
+            <input value={f.status} autoFocus onChange={e => set('status', e.target.value)} placeholder="상태 직접 입력" />
+          )}
+        </div>
+        <div className="modal-row"><label>기타 주요 경력</label>
+          <input value={f.career_note} onChange={e => set('career_note', e.target.value)} placeholder="이전 직장, 자격증 등" /></div>
+        <div className="modal-btns">
+          <button className="cancel-btn" onClick={onClose}>취소</button>
+          <button className="save-btn" onClick={save}>등록</button>
+        </div>
+      </div>
+    </div>
+  )
 }
