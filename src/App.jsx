@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 import './App.css'
 
-const STAGES = ['서류접수', '전화상담', '면접', '동승심사', '채용완료', '불합격']
+const STAGES = ['서류접수', '전화상담', '면접', '동승심사', '채용완료']
 const STAGE_COLORS = {
   '서류접수': ['#E6F1FB', '#185FA5'],
   '전화상담': ['#FAEEDA', '#BA7517'],
@@ -14,17 +14,15 @@ const STAGE_COLORS = {
 const POSITIONS = ['새벽수거', '세탁물수거', '가구배송/조립', '기타']
 const CAREER_TYPES = ['신입', '경력']
 const TRUCK_OPTIONS = ['없음', '있음']
-const STATUS_OPTIONS = ['', '재통화', '면접예정', '지원취소', '재면접의사', '결정통보다시', '면접연기']
+const STATUS_OPTIONS = ['', '재통화', '지원취소', '면접연기']
 const STATUS_COLORS = {
   '재통화': ['#FAEEDA', '#BA7517'],
-  '면접예정': ['#EEEDFE', '#534AB7'],
   '지원취소': ['#FCEBEB', '#A32D2D'],
-  '재면접의사': ['#E6F1FB', '#185FA5'],
-  '결정통보다시': ['#E1F5EE', '#0F6E56'],
   '면접연기': ['#F1EFE8', '#5F5E5A'],
 }
+const DEFAULT_STATUS_COLOR = ['#E6F1FB', '#185FA5'] // 직접입력한 상태 색
+const statusColor = (s) => STATUS_COLORS[s] || DEFAULT_STATUS_COLOR
 const COMPANIES = ['오늘의집', '한샘', '주원', 'TK']
-const STATUS_FILTERS = STATUS_OPTIONS.filter(s => s) // 빈값 제외
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
 const CALL_COLORS = {
   '연결됨': ['#E1F5EE', '#0F6E56'],
@@ -46,6 +44,7 @@ function formatPhone(v) {
 export default function App() {
   const [applicants, setApplicants] = useState([])
   const [calls, setCalls] = useState([])
+  const [myEvents, setMyEvents] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [view, setView] = useState('전체')
   const [screen, setScreen] = useState('list') // 'list' | 'calendar'
@@ -95,6 +94,10 @@ export default function App() {
       setApplicants(ap || [])
       setCalls(cl || [])
     }
+    // 내 일정: 테이블이 아직 없으면 조용히 건너뜀
+    const { data: me, error: e3 } = await supabase
+      .from('my_events').select('*').order('event_date', { ascending: true })
+    if (!e3) setMyEvents(me || [])
     setLoading(false)
   }, [])
 
@@ -105,6 +108,7 @@ export default function App() {
       .channel('realtime-recruit')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'applicants' }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'my_events' }, loadData)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [loadData])
@@ -123,6 +127,14 @@ export default function App() {
     const mq = !search || a.name.includes(search) || (a.phone || '').includes(search)
     return mq && matchView(a)
   })
+
+  // 상태 필터칩: 기본 상태 + 데이터에 실제로 쓰인 직접입력 상태까지
+  const statusChips = (() => {
+    const base = STATUS_OPTIONS.filter(s => s)
+    const used = [...new Set(applicants.map(a => a.status).filter(Boolean))]
+    const extra = used.filter(s => !base.includes(s))
+    return [...base, ...extra]
+  })()
 
   function viewCount(key) {
     return applicants.filter(a => {
@@ -182,6 +194,18 @@ export default function App() {
     await loadData()
   }
 
+  async function addMyEvent(form) {
+    const { error } = await supabase.from('my_events').insert([form])
+    if (error) { alert('일정 저장 실패: ' + error.message + '\n(Supabase에 my_events 표를 먼저 만들었는지 확인하세요)'); return }
+    await loadData()
+  }
+
+  async function deleteMyEvent(id) {
+    if (!confirm('이 일정을 삭제할까요?')) return
+    await supabase.from('my_events').delete().eq('id', id)
+    await loadData()
+  }
+
   const detailOpen = !!selected
 
   return (
@@ -224,8 +248,8 @@ export default function App() {
             })}
           </div>
           <div className="filter-row" style={{ marginTop: 6 }}>
-            {STATUS_FILTERS.map(s => {
-              const [bg, fg] = STATUS_COLORS[s]
+            {statusChips.map(s => {
+              const [bg, fg] = statusColor(s)
               const on = view === 's:' + s
               const cnt = viewCount('s:' + s)
               return (
@@ -245,7 +269,6 @@ export default function App() {
           {!loading && !filtered.length && <div className="hint">해당 지원자 없음</div>}
           {filtered.map(a => {
             const [bg, fg] = STAGE_COLORS[a.stage] || ['#eee', '#333']
-            const sc = STATUS_COLORS[a.status]
             const meta = [a.age ? a.age + '세' : '', a.region, a.position, a.target_company]
               .filter(Boolean).join(' · ')
             return (
@@ -254,8 +277,8 @@ export default function App() {
                 <div className="ap-top">
                   <span className="ap-name">{a.name}</span>
                   {a.has_truck === '있음' && <span className="ap-truck">🚚</span>}
-                  {a.status && sc ? (
-                    <span className="ap-badge" style={{ background: sc[0], color: sc[1] }}>{a.status}</span>
+                  {a.status ? (
+                    <span className="ap-badge" style={{ background: statusColor(a.status)[0], color: statusColor(a.status)[1] }}>{a.status}</span>
                   ) : (
                     <span className="ap-badge" style={{ background: bg, color: fg }}>{a.stage}</span>
                   )}
@@ -271,7 +294,9 @@ export default function App() {
 
       <div className="main">
         {screen === 'calendar' ? (
-          <CalendarView applicants={applicants} onPick={(id) => { setScreen('list'); setSelectedId(id); setActiveTab('info') }} onBack={() => setScreen('list')} />
+          <CalendarView applicants={applicants} myEvents={myEvents}
+            onAddMyEvent={addMyEvent} onDeleteMyEvent={deleteMyEvent}
+            onPick={(id) => { setScreen('list'); setSelectedId(id); setActiveTab('info') }} onBack={() => setScreen('list')} />
         ) : !selected ? (
           <div className="empty">지원자를 선택하세요</div>
         ) : (
@@ -287,9 +312,9 @@ export default function App() {
                     <span>💼 {selected.position || '-'}</span>
                     {selected.target_company && <span>🏢 {selected.target_company}</span>}
                   </div>
-                  {selected.status && STATUS_COLORS[selected.status] && (
+                  {selected.status && (
                     <div style={{ marginTop: 6 }}>
-                      <span className="tag" style={{ background: STATUS_COLORS[selected.status][0], color: STATUS_COLORS[selected.status][1], fontWeight: 600, fontSize: 13, padding: '3px 10px' }}>{selected.status}</span>
+                      <span className="tag" style={{ background: statusColor(selected.status)[0], color: statusColor(selected.status)[1], fontWeight: 600, fontSize: 13, padding: '3px 10px' }}>{selected.status}</span>
                     </div>
                   )}
                 </div>
@@ -406,9 +431,7 @@ function InfoTab({ a, onChange }) {
     <>
       <p className="section-title">구직자 상태</p>
       <div className="info-item full">
-        <select value={a.status || ''} onChange={e => onChange(a.id, 'status', e.target.value)}>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}
-        </select>
+        <StatusField value={a.status} onSave={v => onChange(a.id, 'status', v)} />
       </div>
 
       <p className="section-title" style={{ marginTop: 18 }}>기본 정보</p>
@@ -483,6 +506,27 @@ function SelectField({ label, value, options, onSave }) {
   )
 }
 
+// 구직자 상태: 기본 선택 + 직접입력
+function StatusField({ value, onSave }) {
+  const known = STATUS_OPTIONS.includes(value || '')
+  const [custom, setCustom] = useState(!known && !!value)
+  if (custom) {
+    return (
+      <input defaultValue={value || ''} placeholder="상태 직접 입력 (예: 결정통보 대기)" autoFocus
+        onBlur={e => { onSave(e.target.value); if (!e.target.value) setCustom(false) }} />
+    )
+  }
+  return (
+    <select value={known ? (value || '') : ''} onChange={e => {
+      if (e.target.value === '__direct__') { setCustom(true) }
+      else onSave(e.target.value)
+    }}>
+      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}
+      <option value="__direct__">+ 직접 입력</option>
+    </select>
+  )
+}
+
 function ComboField({ label, value, options, onSave }) {
   const known = options.includes(value)
   const [custom, setCustom] = useState(!known && !!value)
@@ -542,8 +586,9 @@ function DateTimeField({ label, value, onSave }) {
   )
 }
 
-function CalendarView({ applicants, onPick, onBack }) {
+function CalendarView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, onPick, onBack }) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
+  const [addDate, setAddDate] = useState(null) // 내 일정 추가용 날짜(YYYY-MM-DD)
 
   // 날짜별 일정 모으기
   const events = {}
@@ -551,14 +596,17 @@ function CalendarView({ applicants, onPick, onBack }) {
   applicants.forEach(a => {
     if (a.interview_at) {
       const d = new Date(a.interview_at)
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-      add(key, { id: a.id, name: a.name, type: '면접', time: hm(d) })
+      add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`, { kind: 'cand', id: a.id, name: a.name, type: '면접', time: hm(d) })
     }
     if (a.consult_at) {
       const d = new Date(a.consult_at)
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
-      add(key, { id: a.id, name: a.name, type: '전화상담', time: hm(d) })
+      add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`, { kind: 'cand', id: a.id, name: a.name, type: '전화상담', time: hm(d) })
     }
+  })
+  myEvents.forEach(ev => {
+    if (!ev.event_date) return
+    const [y, mo, da] = ev.event_date.split('-').map(Number)
+    add(`${y}-${mo - 1}-${da}`, { kind: 'mine', id: ev.id, name: ev.title, type: '내일정', time: ev.event_time || '' })
   })
 
   const first = new Date(cursor.y, cursor.m, 1)
@@ -571,6 +619,7 @@ function CalendarView({ applicants, onPick, onBack }) {
 
   const today = new Date()
   const isToday = d => d === today.getDate() && cursor.m === today.getMonth() && cursor.y === today.getFullYear()
+  const pad = n => String(n).padStart(2, '0')
 
   function move(diff) {
     let m = cursor.m + diff, y = cursor.y
@@ -583,7 +632,8 @@ function CalendarView({ applicants, onPick, onBack }) {
 
   return (
     <div className="cal-layout">
-      <AgendaPanel applicants={applicants} onPick={onPick} onBack={onBack} />
+      <AgendaPanel applicants={applicants} myEvents={myEvents}
+        onPick={onPick} onBack={onBack} onDeleteMyEvent={onDeleteMyEvent} />
       <div className="cal-wrap">
         <div className="cal-head">
           <button onClick={() => move(-1)}>‹</button>
@@ -594,6 +644,8 @@ function CalendarView({ applicants, onPick, onBack }) {
         <div className="cal-legend">
           <span><i className="lg lg-iv" /> 면접</span>
           <span><i className="lg lg-cs" /> 전화상담</span>
+          <span><i className="lg lg-me" /> 내 일정</span>
+          <span className="cal-hint-inline">날짜 칸을 누르면 내 일정 추가</span>
         </div>
         <div className="cal-grid cal-dow">
           {DOW.map((d, i) => <div key={d} className={'cal-dowcell' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>{d}</div>)}
@@ -602,13 +654,21 @@ function CalendarView({ applicants, onPick, onBack }) {
           {cells.map((d, i) => {
             const key = d ? `${cursor.y}-${cursor.m}-${d}` : 'e' + i
             const evs = d ? (events[key] || []) : []
+            const dateStr = d ? `${cursor.y}-${pad(cursor.m + 1)}-${pad(d)}` : ''
             return (
-              <div key={key} className={'cal-cell' + (d && isToday(d) ? ' today' : '') + (!d ? ' empty' : '')}>
+              <div key={key} className={'cal-cell' + (d && isToday(d) ? ' today' : '') + (!d ? ' empty' : '')}
+                onClick={() => { if (d) setAddDate(dateStr) }}>
                 {d && <div className={'cal-daynum' + (i % 7 === 0 ? ' sun' : i % 7 === 6 ? ' sat' : '')}>{d}</div>}
                 {evs.map((ev, j) => (
-                  <div key={j} className={'cal-ev ' + (ev.type === '면접' ? 'iv' : 'cs')}
-                    onClick={() => onPick(ev.id)} title={ev.type + ' ' + ev.name}>
-                    <b>{ev.time}</b> {ev.name}
+                  <div key={j}
+                    className={'cal-ev ' + (ev.type === '면접' ? 'iv' : ev.type === '전화상담' ? 'cs' : 'me')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (ev.kind === 'mine') onDeleteMyEvent(ev.id)
+                      else onPick(ev.id)
+                    }}
+                    title={ev.kind === 'mine' ? '내 일정 (눌러서 삭제)' : ev.type + ' ' + ev.name}>
+                    {ev.time && <b>{ev.time}</b>} {ev.name}
                   </div>
                 ))}
               </div>
@@ -616,6 +676,10 @@ function CalendarView({ applicants, onPick, onBack }) {
           })}
         </div>
       </div>
+      {addDate && (
+        <MyEventModal date={addDate} onClose={() => setAddDate(null)}
+          onSave={(form) => { onAddMyEvent(form); setAddDate(null) }} />
+      )}
     </div>
   )
 }
@@ -635,56 +699,80 @@ function urgencyColor(diff) {
   return ['#E6F1FB', '#185FA5', 'D-' + diff]
 }
 
-// 달력 옆 "비서" 패널 — 이번 주 면접/전화예약을 한눈에
-function AgendaPanel({ applicants, onPick, onBack }) {
+// 달력 옆 "비서" 패널 — 오늘 / 이번 주 면접·전화예약·내 일정을 한눈에
+function AgendaPanel({ applicants, myEvents = [], onPick, onBack, onDeleteMyEvent }) {
   const items = []
   applicants.forEach(a => {
-    if (a.interview_at) items.push({ id: a.id, name: a.name, company: a.target_company, type: '면접', at: a.interview_at })
-    if (a.consult_at) items.push({ id: a.id, name: a.name, company: a.target_company, type: '전화상담', at: a.consult_at })
+    if (a.interview_at) items.push({ kind: 'cand', id: a.id, name: a.name, company: a.target_company, place: a.interview_place, type: '면접', at: a.interview_at })
+    if (a.consult_at) items.push({ kind: 'cand', id: a.id, name: a.name, company: a.target_company, place: a.consult_place, type: '전화상담', at: a.consult_at })
   })
+  myEvents.forEach(ev => {
+    if (!ev.event_date) return
+    const at = new Date(`${ev.event_date}T${ev.event_time || '00:00'}`)
+    items.push({ kind: 'mine', id: ev.id, name: ev.title, place: ev.place, memo: ev.memo, type: '내일정', at: at.toISOString(), allday: !ev.event_time })
+  })
+
   const enriched = items
     .map(it => ({ ...it, diff: dayDiff(it.at) }))
-    .filter(it => it.diff >= -3 && it.diff <= 7) // 지난 3일 ~ 앞으로 7일
+    .filter(it => it.diff >= -3 && it.diff <= 7)
     .sort((x, y) => new Date(x.at) - new Date(y.at))
 
-  const upcoming = enriched.filter(it => it.diff >= 0)
+  const todayList = enriched.filter(it => it.diff === 0)
+  const weekList = enriched.filter(it => it.diff >= 1)
   const overdue = enriched.filter(it => it.diff < 0)
 
   const dow = ['일', '월', '화', '수', '목', '금', '토']
-  function label(at) {
-    const d = new Date(at)
-    return `${d.getMonth() + 1}/${d.getDate()}(${dow[d.getDay()]}) ${hm(d)}`
+  function label(it) {
+    const d = new Date(it.at)
+    const date = `${d.getMonth() + 1}/${d.getDate()}(${dow[d.getDay()]})`
+    const time = it.allday ? '종일' : hm(d)
+    return `${date} ${time}`
   }
 
   function Row({ it }) {
     const [bg, fg, tag] = urgencyColor(it.diff)
+    const typeCls = it.type === '면접' ? 'iv' : it.type === '전화상담' ? 'cs' : 'me'
     return (
-      <div className="ag-item" onClick={() => onPick(it.id)} style={{ borderLeftColor: fg }}>
+      <div className="ag-item" style={{ borderLeftColor: fg }}
+        onClick={() => { if (it.kind === 'cand') onPick(it.id) }}>
         <div className="ag-line1">
           <span className="ag-tag" style={{ background: bg, color: fg }}>{tag}</span>
           <span className="ag-name">{it.name}</span>
-          <span className={'ag-type ' + (it.type === '면접' ? 'iv' : 'cs')}>{it.type}</span>
+          <span className={'ag-type ' + typeCls}>{it.type}</span>
+          {it.kind === 'mine' && (
+            <button className="ag-del" onClick={(e) => { e.stopPropagation(); onDeleteMyEvent(it.id) }}>✕</button>
+          )}
         </div>
         <div className="ag-line2">
-          {label(it.at)}{it.company ? ' · ' + it.company : ''}
+          {label(it)}
+          {it.company ? ' · ' + it.company : ''}
+          {it.place ? ' · 📍' + it.place : ''}
         </div>
+        {it.memo && <div className="ag-memo">{it.memo}</div>}
       </div>
     )
   }
 
+  const empty = !todayList.length && !weekList.length && !overdue.length
+
   return (
     <div className="agenda">
       <button className="back-btn" onClick={onBack}>← 명단</button>
-      <div className="ag-head">🗒️ 이번 주 일정</div>
-      {!upcoming.length && !overdue.length && (
+      <div className="ag-head">🗒️ 내 일정표</div>
+      {empty && (
         <div className="hint" style={{ padding: '14px 4px', textAlign: 'left' }}>
-          예정된 면접·전화예약이 없습니다.
+          예정된 일정이 없습니다.<br />달력에서 날짜를 눌러 내 일정을 추가해 보세요.
         </div>
       )}
-      {!!upcoming.length && (
+      <div className="ag-group">
+        <div className="ag-grouptitle today">오늘 ({todayList.length})</div>
+        {todayList.length ? todayList.map((it, i) => <Row key={'t' + i} it={it} />)
+          : <div className="ag-none">오늘은 일정이 없습니다</div>}
+      </div>
+      {!!weekList.length && (
         <div className="ag-group">
-          <div className="ag-grouptitle">다가오는 일정 ({upcoming.length})</div>
-          {upcoming.map((it, i) => <Row key={'u' + i} it={it} />)}
+          <div className="ag-grouptitle">이번 주 ({weekList.length})</div>
+          {weekList.map((it, i) => <Row key={'w' + i} it={it} />)}
         </div>
       )}
       {!!overdue.length && (
@@ -693,6 +781,45 @@ function AgendaPanel({ applicants, onPick, onBack }) {
           {overdue.map((it, i) => <Row key={'o' + i} it={it} />)}
         </div>
       )}
+    </div>
+  )
+}
+
+// 내 일정 추가 모달
+function MyEventModal({ date, onClose, onSave }) {
+  const [f, setF] = useState({ event_date: date, event_time: '', title: '', place: '', memo: '' })
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const pad = n => String(n).padStart(2, '0')
+  const TIMES = []
+  for (let h = 6; h <= 22; h++) { TIMES.push(`${pad(h)}:00`); TIMES.push(`${pad(h)}:30`) }
+
+  function save() {
+    if (!f.title.trim()) { alert('일정 제목을 입력하세요'); return }
+    onSave({ ...f, event_time: f.event_time || null })
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h3>내 일정 추가</h3>
+        <div className="modal-row"><label>날짜</label>
+          <input type="date" value={f.event_date} onChange={e => set('event_date', e.target.value)} /></div>
+        <div className="modal-row"><label>시간 (선택 안 하면 종일)</label>
+          <select value={f.event_time} onChange={e => set('event_time', e.target.value)}>
+            <option value="">종일</option>
+            {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select></div>
+        <div className="modal-row"><label>제목 *</label>
+          <input value={f.title} autoFocus onChange={e => set('title', e.target.value)} placeholder="예: 화물협회 미팅" /></div>
+        <div className="modal-row"><label>장소</label>
+          <input value={f.place} onChange={e => set('place', e.target.value)} placeholder="예: 판교 사무실" /></div>
+        <div className="modal-row"><label>메모</label>
+          <input value={f.memo} onChange={e => set('memo', e.target.value)} placeholder="간단 메모" /></div>
+        <div className="modal-btns">
+          <button className="cancel-btn" onClick={onClose}>취소</button>
+          <button className="save-btn" onClick={save}>추가</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -788,6 +915,7 @@ function AddModal({ onClose, onSave, existing }) {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const [customPos, setCustomPos] = useState(false)
   const [customCo, setCustomCo] = useState(false)
+  const [customStatus, setCustomStatus] = useState(false)
 
   const phoneDigits = f.phone.replace(/[^0-9]/g, '')
   const dup = existing.find(a => (a.phone || '').replace(/[^0-9]/g, '') === phoneDigits && phoneDigits.length >= 10)
@@ -853,8 +981,18 @@ function AddModal({ onClose, onSave, existing }) {
         <div className="modal-row"><label>차종</label>
           <input value={f.truck_type} onChange={e => set('truck_type', e.target.value)} placeholder="예: 1톤 탑차" /></div>
         <div className="modal-row"><label>구직자 상태</label>
-          <select value={f.status} onChange={e => set('status', e.target.value)}>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}</select></div>
+          {!customStatus ? (
+            <select value={f.status} onChange={e => {
+              if (e.target.value === '__direct__') { setCustomStatus(true); set('status', '') }
+              else set('status', e.target.value)
+            }}>
+              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s === '' ? '상태 없음' : s}</option>)}
+              <option value="__direct__">+ 직접 입력</option>
+            </select>
+          ) : (
+            <input value={f.status} autoFocus onChange={e => set('status', e.target.value)} placeholder="상태 직접 입력" />
+          )}
+        </div>
         <div className="modal-row"><label>기타 주요 경력</label>
           <input value={f.career_note} onChange={e => set('career_note', e.target.value)} placeholder="이전 직장, 자격증 등" /></div>
         <div className="modal-btns">
