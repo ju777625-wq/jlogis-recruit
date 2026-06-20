@@ -22,6 +22,8 @@ const STATUS_COLORS = {
 }
 const DEFAULT_STATUS_COLOR = ['#E6F1FB', '#185FA5'] // 직접입력한 상태 색
 const statusColor = (s) => STATUS_COLORS[s] || DEFAULT_STATUS_COLOR
+// 프리셋(빠른 칩)에선 빼고, '직접 입력'할 때 추천으로만 뜨는 상태
+const STATUS_SUGGESTIONS = ['재면접의사', '결정통보다시']
 const COMPANIES = ['오늘의집', '한샘', '주원', 'TK']
 const CALL_RESULTS = ['연결됨', '부재중', '콜백 예정', '거절', '기타']
 const CALL_COLORS = {
@@ -128,11 +130,11 @@ export default function App() {
     return mq && matchView(a)
   })
 
-  // 상태 필터칩: 기본 상태 + 데이터에 실제로 쓰인 직접입력 상태까지
+  // 상태 필터칩: 기본 상태 + 데이터에 실제로 쓰인 직접입력 상태까지 (추천 전용 상태는 제외)
   const statusChips = (() => {
     const base = STATUS_OPTIONS.filter(s => s)
     const used = [...new Set(applicants.map(a => a.status).filter(Boolean))]
-    const extra = used.filter(s => !base.includes(s))
+    const extra = used.filter(s => !base.includes(s) && !STATUS_SUGGESTIONS.includes(s))
     return [...base, ...extra]
   })()
 
@@ -208,6 +210,15 @@ export default function App() {
 
   function goScreen(s) { setScreen(s); if (s !== 'list') setSelectedId(null) }
   function pickApplicant(id) { setScreen('list'); setSelectedId(id); setActiveTab('info') }
+
+  async function updateMyEvent(id, patch) {
+    setMyEvents(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
+    await supabase.from('my_events').update(patch).eq('id', id)
+  }
+  function toggleDone(item) {
+    if (item.kind === 'mine') updateMyEvent(item.id, { done: !item.done })
+    else updateField(item.id, item.type === '면접' ? 'interview_done' : 'consult_done', !item.done)
+  }
 
   const detailOpen = !!selected
 
@@ -297,7 +308,7 @@ export default function App() {
       <div className="main">
         {screen === 'today' ? (
           <TodayView applicants={applicants} myEvents={myEvents}
-            onAddMyEvent={addMyEvent} onDeleteMyEvent={deleteMyEvent}
+            onAddMyEvent={addMyEvent} onDeleteMyEvent={deleteMyEvent} onToggleDone={toggleDone}
             onPick={pickApplicant} onNav={goScreen} />
         ) : screen === 'calendar' ? (
           <CalendarView applicants={applicants} myEvents={myEvents}
@@ -518,8 +529,14 @@ function StatusField({ value, onSave }) {
   const [custom, setCustom] = useState(!known && !!value)
   if (custom) {
     return (
-      <input defaultValue={value || ''} placeholder="상태 직접 입력 (예: 결정통보 대기)" autoFocus
-        onBlur={e => { onSave(e.target.value); if (!e.target.value) setCustom(false) }} />
+      <>
+        <input defaultValue={value || ''} placeholder="상태 직접 입력 (예: 결정통보 대기)" autoFocus
+          list="status-suggest-info"
+          onBlur={e => { onSave(e.target.value); if (!e.target.value) setCustom(false) }} />
+        <datalist id="status-suggest-info">
+          {STATUS_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+        </datalist>
+      </>
     )
   }
   return (
@@ -605,7 +622,7 @@ function ScreenNav({ current, onNav, className = '' }) {
 }
 
 // "오늘" 브리핑 화면 — 비서처럼 오늘 일정 + 통화할 사람 + 놓친 일정
-function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, onPick, onNav }) {
+function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, onToggleDone, onPick, onNav }) {
   const [addOpen, setAddOpen] = useState(false)
   const now = new Date()
   const pad = n => String(n).padStart(2, '0')
@@ -620,18 +637,24 @@ function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, o
   const todays = []
   applicants.forEach(a => {
     if (a.interview_at && isSameDay(a.interview_at))
-      todays.push({ kind: 'cand', id: a.id, sortAt: new Date(a.interview_at), time: hm(new Date(a.interview_at)), type: '면접', name: a.name, phone: a.phone, company: a.target_company, place: a.interview_place })
+      todays.push({ kind: 'cand', id: a.id, sortAt: new Date(a.interview_at), time: hm(new Date(a.interview_at)), type: '면접', name: a.name, phone: a.phone, company: a.target_company, place: a.interview_place, done: !!a.interview_done })
     if (a.consult_at && isSameDay(a.consult_at))
-      todays.push({ kind: 'cand', id: a.id, sortAt: new Date(a.consult_at), time: hm(new Date(a.consult_at)), type: '전화상담', name: a.name, phone: a.phone, company: a.target_company, place: a.consult_place })
+      todays.push({ kind: 'cand', id: a.id, sortAt: new Date(a.consult_at), time: hm(new Date(a.consult_at)), type: '전화상담', name: a.name, phone: a.phone, company: a.target_company, place: a.consult_place, done: !!a.consult_done })
   })
   myEvents.forEach(ev => {
     if (ev.event_date === todayStr)
-      todays.push({ kind: 'mine', id: ev.id, sortAt: new Date(`${ev.event_date}T${ev.event_time || '00:00'}`), time: ev.event_time || '', allday: !ev.event_time, type: '내일정', name: ev.title, place: ev.place, memo: ev.memo })
+      todays.push({ kind: 'mine', id: ev.id, sortAt: new Date(`${ev.event_date}T${ev.event_time || '00:00'}`), time: ev.event_time || '', allday: !ev.event_time, type: '내일정', name: ev.title, place: ev.place, memo: ev.memo, done: !!ev.done })
   })
-  todays.sort((x, y) => x.sortAt - y.sortAt)
+  // 완료한 항목은 아래로, 그 안에서 시간순
+  todays.sort((x, y) => (x.done ? 1 : 0) - (y.done ? 1 : 0) || x.sortAt - y.sortAt)
+  const todayDoneCnt = todays.filter(t => t.done).length
 
-  // 오늘 통화할 사람: 재통화 상태
-  const callbacks = applicants.filter(a => a.status === '재통화')
+  // 오늘 챙길 사람: 상태가 있는 사람(지원취소·추천전용 상태 제외)을 상태별로 묶기
+  const followups = applicants.filter(a => a.status && a.status !== '지원취소' && !STATUS_SUGGESTIONS.includes(a.status))
+  const groups = {}
+  followups.forEach(a => { (groups[a.status] = groups[a.status] || []).push(a) })
+  const groupOrder = ['재통화', '면접연기', ...Object.keys(groups).filter(s => !['재통화', '면접연기'].includes(s))]
+    .filter(s => groups[s])
 
   // 놓친 일정: 오늘 이전(지난 7일) 면접/전화
   const overdue = []
@@ -658,17 +681,19 @@ function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, o
           <span>면접 {cnt.iv}</span>
           <span>전화상담 {cnt.cs}</span>
           <span>내 일정 {cnt.me}</span>
-          <span className="cb">재통화 {callbacks.length}</span>
+          <span className="cb">챙길 사람 {followups.length}</span>
         </div>
       </div>
 
       <div className="tv-section">
-        <div className="tv-section-title">오늘 일정</div>
+        <div className="tv-section-title">오늘 일정 {todays.length > 0 && <span className="tv-done-count">{todayDoneCnt}/{todays.length} 완료</span>}</div>
         {todays.length ? todays.map((it, i) => {
           const [bg, fg] = TYPE[it.type] || ['#eee', '#555']
           return (
-            <div key={i} className="tv-card" onClick={() => it.kind === 'cand' && onPick(it.id)}
+            <div key={i} className={'tv-card' + (it.done ? ' done' : '')} onClick={() => it.kind === 'cand' && onPick(it.id)}
               style={{ cursor: it.kind === 'cand' ? 'pointer' : 'default' }}>
+              <button className={'tv-check' + (it.done ? ' on' : '')} title="완료 표시"
+                onClick={(e) => { e.stopPropagation(); onToggleDone(it) }}>{it.done ? '✓' : ''}</button>
               <div className="tv-time">{it.allday ? '종일' : it.time}</div>
               <div className="tv-body">
                 <div className="tv-row1">
@@ -690,19 +715,24 @@ function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, o
       </div>
 
       <div className="tv-section">
-        <div className="tv-section-title">오늘 통화할 사람 <span className="tv-count">{callbacks.length}</span></div>
-        {callbacks.length ? callbacks.map(a => (
-          <div key={a.id} className="tv-card cb" onClick={() => onPick(a.id)} style={{ cursor: 'pointer' }}>
-            <div className="tv-body">
-              <div className="tv-row1">
-                <span className="tv-type" style={{ background: '#FAEEDA', color: '#BA7517' }}>재통화</span>
-                <span className="tv-name">{a.name}</span>
-              </div>
-              <div className="tv-meta">{[a.target_company, a.position, a.region].filter(Boolean).join(' · ')}</div>
-              {a.phone && <a className="tv-call" href={'tel:' + a.phone} onClick={e => e.stopPropagation()}>📞 {a.phone}</a>}
+        <div className="tv-section-title">오늘 챙길 사람 <span className="tv-count">{followups.length}</span></div>
+        {groupOrder.length ? groupOrder.map(st => {
+          const [bg, fg] = statusColor(st)
+          return (
+            <div key={st} className="tv-group">
+              <div className="tv-group-head"><span className="tv-type" style={{ background: bg, color: fg }}>{st}</span> {groups[st].length}명</div>
+              {groups[st].map(a => (
+                <div key={a.id} className="tv-card cb" style={{ borderLeftColor: fg }} onClick={() => onPick(a.id)}>
+                  <div className="tv-body">
+                    <div className="tv-row1"><span className="tv-name">{a.name}</span></div>
+                    <div className="tv-meta">{[a.target_company, a.position, a.region].filter(Boolean).join(' · ')}</div>
+                    {a.phone && <a className="tv-call" href={'tel:' + a.phone} onClick={e => e.stopPropagation()}>📞 {a.phone}</a>}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        )) : <div className="tv-empty">재통화로 표시한 사람이 없습니다.</div>}
+          )
+        }) : <div className="tv-empty">상태로 표시한 사람이 없습니다. (재통화·면접연기 등)</div>}
       </div>
 
       {!!overdue.length && (
@@ -1129,7 +1159,12 @@ function AddModal({ onClose, onSave, existing }) {
               <option value="__direct__">+ 직접 입력</option>
             </select>
           ) : (
-            <input value={f.status} autoFocus onChange={e => set('status', e.target.value)} placeholder="상태 직접 입력" />
+            <>
+              <input value={f.status} autoFocus onChange={e => set('status', e.target.value)} placeholder="상태 직접 입력" list="status-suggest-add" />
+              <datalist id="status-suggest-add">
+                {STATUS_SUGGESTIONS.map(s => <option key={s} value={s} />)}
+              </datalist>
+            </>
           )}
         </div>
         <div className="modal-row"><label>기타 주요 경력</label>
