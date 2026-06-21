@@ -778,6 +778,11 @@ function CalendarView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent
     add(`${y}-${mo - 1}-${da}`, { kind: 'mine', id: ev.id, name: ev.title, type: '내일정', time: ev.event_time || '' })
   })
 
+  // 각 날짜 칸의 일정을 시간 오름차순으로 정렬 (시간 없는 일정은 맨 위)
+  Object.values(events).forEach(list =>
+    list.sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+  )
+
   const first = new Date(cursor.y, cursor.m, 1)
   const startDow = first.getDay()
   const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate()
