@@ -260,7 +260,7 @@ export default function App() {
               )
             })}
           </div>
-          <div className="filter-row" style={{ marginTop: 6 }}>
+          <div className="filter-row wrap" style={{ marginTop: 6 }}>
             {statusChips.map(s => {
               const [bg, fg] = statusColor(s)
               const on = view === 's:' + s
