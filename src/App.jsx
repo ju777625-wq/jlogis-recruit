@@ -624,6 +624,12 @@ function ScreenNav({ current, onNav, className = '' }) {
 // "오늘" 브리핑 화면 — 비서처럼 오늘 일정 + 통화할 사람 + 놓친 일정
 function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, onToggleDone, onPick, onNav }) {
   const [addOpen, setAddOpen] = useState(false)
+  // 1분마다 화면을 갱신해서 "임박" 배너와 남은 시간이 실시간으로 맞도록
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTick(x => x + 1), 60000)
+    return () => clearInterval(t)
+  }, [])
   const now = new Date()
   const pad = n => String(n).padStart(2, '0')
   const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
@@ -648,6 +654,16 @@ function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, o
   // 완료한 항목은 아래로, 그 안에서 시간순
   todays.sort((x, y) => (x.done ? 1 : 0) - (y.done ? 1 : 0) || x.sortAt - y.sortAt)
   const todayDoneCnt = todays.filter(t => t.done).length
+
+  // 임박 일정: 지금부터 3시간 안에 시작하는 미완료 일정
+  const URGENT_MS = 3 * 60 * 60 * 1000
+  const urgent = todays.filter(t => !t.done && !t.allday && t.sortAt - now >= 0 && t.sortAt - now <= URGENT_MS)
+  const leftLabel = (ms) => {
+    const m = Math.max(0, Math.round(ms / 60000))
+    if (m < 1) return '곧 시작'
+    const h = Math.floor(m / 60), mm = m % 60
+    return (h ? h + '시간 ' : '') + (mm ? mm + '분 ' : '') + '남음'
+  }
 
   // 오늘 챙길 사람: 상태가 있는 사람(지원취소·추천전용 상태 제외)을 상태별로 묶기
   const followups = applicants.filter(a => a.status && a.status !== '지원취소' && !STATUS_SUGGESTIONS.includes(a.status))
@@ -685,6 +701,20 @@ function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, o
         </div>
       </div>
 
+      {urgent.length > 0 && (
+        <div className="tv-urgent-banner">
+          <div className="tv-urgent-title">⏰ 3시간 안에 시작하는 일정 {urgent.length}건</div>
+          {urgent.map((it, i) => (
+            <div key={i} className="tv-urgent-item"
+              onClick={() => it.kind === 'cand' && onPick(it.id)}
+              style={{ cursor: it.kind === 'cand' ? 'pointer' : 'default' }}>
+              <b>{it.time}</b> {it.type} · {it.name}{it.place ? ' · 📍' + it.place : ''}
+              <span className="tv-urgent-left">{leftLabel(it.sortAt - now)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="tv-section">
         <div className="tv-section-title">오늘 일정 {todays.length > 0 && <span className="tv-done-count">{todayDoneCnt}/{todays.length} 완료</span>}</div>
         {todays.length ? todays.map((it, i) => {
@@ -698,6 +728,7 @@ function TodayView({ applicants, myEvents = [], onAddMyEvent, onDeleteMyEvent, o
               <div className="tv-body">
                 <div className="tv-row1">
                   <span className="tv-type" style={{ background: bg, color: fg }}>{it.type}</span>
+                  {urgent.includes(it) && <span className="tv-urgent-badge">임박</span>}
                   <span className="tv-name">{it.name}</span>
                   {it.kind === 'mine' && <button className="tv-del" onClick={(e) => { e.stopPropagation(); onDeleteMyEvent(it.id) }}>✕</button>}
                 </div>
